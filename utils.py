@@ -2,8 +2,112 @@
 """
 Created on Mon Oct  3 20:31:11 2022
 
-@author: Group 7
+@author:Billy K
 """
+
+# Preprocess film scripts
+def preprocess_film_scripts_df(df_in):
+    import pandas as pd
+    processed_df = df_in.copy()
+    # Remove "Script_" from Title
+    processed_df["movie_titles_stripped"] = processed_df.movie_titles.apply(clean_film_titles)
+    
+    # Manual Fixes
+    processed_df.loc[processed_df["movie_titles_stripped"] == "terminator 2 judgement day", "movie_titles_stripped"] = 'terminator 2 judgment day'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "lord of the rings fellowship of the ring", "movie_titles_stripped"] = 'lord of rings fellowship of ring'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "lord of rings two towers", "movie_titles_stripped"] = 'lord of rings two towers'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "lord of rings return of king", "movie_titles_stripped"] = 'lord of rings return of king'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "star wars phantom menace", "movie_titles_stripped"] = 'star wars episode i phantom menace'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "star wars revenge of sith", "movie_titles_stripped"] = 'star wars episode iii revenge of sith'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "star wars return of jedi", "movie_titles_stripped"] = 'star wars episode vi return of jedi'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "star wars empire strikes back", "movie_titles_stripped"] = 'star wars episode v empire strikes back'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "star wars a new hope", "movie_titles_stripped"] = 'star wars episode iv a new hope'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "star wars attack of clones", "movie_titles_stripped"] = 'star wars episode ii attack of clones'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "star wars force awakens", "movie_titles_stripped"] = 'star wars episode vii force awakens'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "walk to remember a", "movie_titles_stripped"] = 'a walk to remember'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "perfect world a", "movie_titles_stripped"] = 'a perfect world'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "hellraiser 3 hell on earth", "movie_titles_stripped"] = 'hellraiser iii hell on earth'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "american werewolf in london", "movie_titles_stripped"] = 'an american werewolf in london'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "halloween curse of michael myers", "movie_titles_stripped"] = 'halloween curse of michael myers halloween 6'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "jurassic park lost world", "movie_titles_stripped"] = 'lost world jurassic park'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "harold and kumar go to white castle", "movie_titles_stripped"] = 'harold kumar go to white castle'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "chronicles of narnia lion witch and wardrobe", "movie_titles_stripped"] = 'chronicles of narnia lion witch and wardrobe'
+
+    # remove words in parentheses from film scripts
+   
+    # Only get year of review
+    #processed_df['release_year'] = pd.DatetimeIndex(processed_df['original_release_date']).year
+    #write_pickle(processed_df, out_path, name_in)
+    return processed_df
+
+# Preprocess rotten tomatoes
+def preprocess_rt_df(df_in):
+    import pandas as pd
+    processed_df = df_in.copy()
+    # Remove "Script_" from Title
+    processed_df["movie_titles_stripped"] = processed_df.movie_title.apply(clean_film_titles)
+    return processed_df
+
+# Custom helper functions for film scripts
+def clean_film_titles(sent_in):
+    import re
+    # Remove "Script_" from Title
+    sent_clean =  sent_in.replace("Script_", "")
+    # Remove all '_' 
+    sent_clean = sent_clean.replace("_", "")
+    # Remove non alphanumberic characters and lowercase 
+    sent_clean = re.sub("[^A-Za-z0-9]+", " ", sent_clean.lower()) 
+    # If movie title ends with "the", move it to the beginning
+    sent_clean = sent_clean.replace("the", "")
+    # Remove all double spaces
+    sent_clean = re.sub(' +', ' ', sent_clean)
+    # Remove words between parens for movie titles
+    sent_clean =  re.sub("[\(\[].*?[\)\]]", "", sent_clean)
+    # Strip the sentences
+    sent_clean = sent_clean.strip()
+    return sent_clean
+
+def remove_parens(sent_in):
+    import re
+    sent_clean =  re.sub("[\(\[].*?[\)\]]", "", sent_in)
+    return sent_clean
+
+def calculate_dc_score(text_in):
+    from readability import Readability
+    r = Readability(text_in)
+    dc_score = r.dale_chall().score
+    return dc_score
+    
+
+def write_new_film_df_pickle(film_scripts_dir, out_path): 
+    import os
+    import pandas as pd
+    # Get film scripts and put into dictionary
+    movie_titles = []
+    movie_scripts = []
+
+    err_count = 0
+    for filename in os.listdir(film_scripts_dir):
+             name, file_extension = os.path.splitext(filename)
+             try:
+                 f = open(film_scripts_dir + filename, "r", encoding="utf-8")
+                 text = f.read()
+
+                 # Add to lists to create DF
+                 movie_titles.append(name)
+                 movie_scripts.append(text)
+                 
+                 print(name)
+             except Exception as e:
+                 print(e)
+                 err_count+=1
+                 pass
+    movie_df = pd.DataFrame(list(zip(movie_titles, movie_scripts)), columns=['movie_titles', 'movie_scripts'])
+    write_pickle(movie_df, out_path, 'movie_scripts_df')
+
+    print("Error count: " + str(err_count))
+
+    return movie_df
 
 # Custom helper functions not available from utils
 def read_csv(file_path):

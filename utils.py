@@ -4,6 +4,54 @@ Created on Mon Oct  3 20:31:11 2022
 
 @author:Billy K
 """
+import nltk
+import pandas as pd
+
+def build_binary_rf(df, feature_col, target_col):
+    import numpy as np
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import train_test_split
+    from scipy.sparse import vstack
+    # Concatenate all the TF-IDF matrices into a single matrix
+    X = df[feature_col]
+    y = df[target_col]
+
+    # Split data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=25)
+
+    # Random Forest Classifer
+    """ TODO: tune
+    param_grid = {'n_estimators': np.arange(1,50,2),
+                  'max_depth': np.arange(1,10,2)}    
+    """
+    
+    random_forest_classifier = RandomForestClassifier(n_estimators=100, random_state=25)
+    
+    # Random Forest does not require scaled data 
+    random_forest_classifier.fit(X_train, y_train)
+    
+    # Evaluate model on test data
+    score = rf.score(X_test, y_test)
+    print("Test accuracy: {:.3f}".format(score))
+
+
+def process_tfidf(text):
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from nltk.corpus import stopwords
+ 
+    # Tokenize text
+    tokens = nltk.word_tokenize(text)
+    
+    # Remove stop words
+    stop_words = set(stopwords.words('english'))
+    tokens = [word for word in tokens if word.lower() not in stop_words]
+    
+    # Apply frequency-based feature selection
+    # Double check max_features
+    tfidf_vectorizer = TfidfVectorizer(max_df=0.8, min_df=2, max_features=1000)
+    tfidf = tfidf_vectorizer.fit_transform(tokens)
+    return  pd.DataFrame(tfidf).toarray()
+
 
 # Preprocess film scripts
 def preprocess_film_scripts_df(df_in):
@@ -33,10 +81,13 @@ def preprocess_film_scripts_df(df_in):
     processed_df.loc[processed_df["movie_titles_stripped"] == "harold and kumar go to white castle", "movie_titles_stripped"] = 'harold kumar go to white castle'
     processed_df.loc[processed_df["movie_titles_stripped"] == "chronicles of narnia lion witch and wardrobe", "movie_titles_stripped"] = 'chronicles of narnia lion witch and wardrobe'
 
-    # remove words in parentheses from film scripts
-   
-    # Only get year of review
-    #processed_df['release_year'] = pd.DatetimeIndex(processed_df['original_release_date']).year
+    # remove words in parentheses from film scripts since these are not spoken
+    processed_df["film_scripts_processed"] = processed_df.movie_scripts.apply(remove_parens)
+    # remove all capital letters followed by a colon
+    processed_df["film_scripts_processed"] = processed_df.film_scripts_processed.apply(remove_names)
+    # Remove stuck words
+    processed_df["film_scripts_processed"] = processed_df.film_scripts_processed.apply(split_stuck_words)
+
     #write_pickle(processed_df, out_path, name_in)
     return processed_df
 
@@ -47,6 +98,73 @@ def preprocess_rt_df(df_in):
     # Remove "Script_" from Title
     processed_df["movie_titles_stripped"] = processed_df.movie_title.apply(clean_film_titles)
     return processed_df
+
+
+def remove_names(sent_in):
+    import re
+    # Remove any text in all caps followed by a colon
+    sent_clean = re.sub(r'[A-Z]+:', '', sent_in)
+    # Remove ALL Caps of length at least 2 and leave the rest
+    sent_clean = re.sub(r'\b[A-Z]{2,}\b', '', sent_clean)
+    return sent_clean
+
+def get_all_genres(df):
+    genres_col = df['genres']
+    genres_list = genres_col.str.split(',')
+    genres_list_exploded = genres_list.explode().str.strip()
+    unique_genres = set(genres_list_exploded)
+    return unique_genres
+
+def count_movies_per_genre(df):
+    # Split the genres column by comma, strip whitespace, and create a new dataframe with binary indicator variables
+    genre_df = df['genres'].str.replace(',\s+', ',', regex=True).str.get_dummies(sep=',')
+    
+    # Compute the count of movies for each genre
+    genre_counts = genre_df.sum().sort_values(ascending=False)
+    
+    return genre_counts
+    
+def shapiro_wilk_test(df, column_name):
+    import scipy.stats as stats
+    import pandas as pd
+    stat, p = stats.shapiro(df[column_name])
+    
+    normally_distributed = False
+
+    if p > 0.05:
+        print("Data is normally distributed")
+        normally_distributed = True
+    else:
+        print("Data is not normally distributed")
+        
+    return normally_distributed
+
+# Split stuck words such as "systemcontrolled" or "Jedibecome" using wordninja
+def split_stuck_words(text):
+    import wordninja
+    from nltk import tokenize
+    
+    sentences_out = []
+    
+    arr_sentences = tokenize.sent_tokenize(text)
+    
+    for sent in arr_sentences:
+        my_sent_split = wordninja.split(sent)
+        
+
+        fixed_sentence = ""
+        # Check if last char is punctuation so we can add to wordnina split
+        if sent and sent[-1] and sent[-1][-1].strip() in ",.;:!?":
+            last_word = sent[-1]
+            last_char = last_word[-1]
+            fixed_sentence = " ".join(my_sent_split) + last_char
+        else:
+            fixed_sentence = " ".join(my_sent_split)
+            
+        sentences_out.append(fixed_sentence.strip())
+
+    return " ".join(sentences_out)
+
 
 # Custom helper functions for film scripts
 def clean_film_titles(sent_in):
@@ -77,7 +195,10 @@ def calculate_dc_score(text_in):
     r = Readability(text_in)
     dc_score = r.dale_chall().score
     return dc_score
-    
+
+def percentage(data):
+    """Returns how many % of the 'data' returns 'True' for the given isupper func."""
+    return sum(map(str.isupper,data)) / len(data)*100
 
 def write_new_film_df_pickle(film_scripts_dir, out_path): 
     import os
@@ -135,21 +256,21 @@ def split_pickles(data, out_path, file_prefix, num_of_processes=8):
    Write out sentiment pickles, defined by num_of_processes which I default set to 8
    results in /pickles folder with names such as sentiment_0.pk
 """
-def parallelize_write_sentiment_pickles(data, col_in, col_out, out_path, func, num_of_processes=8):
+def parallelize_write_tfidf_pickles(data, col_in, col_out, out_path, func, num_of_processes=4, split_size=10):
     from multiprocessing import Pool
     import numpy as np
     import time
     import os
-    data_split = np.array_split(data, num_of_processes)
+    data_split = np.array_split(data, split_size)
 
-    for i in range(num_of_processes):
-        print(f'Running sentiment on data_split {i}')
+    for i in range(split_size):
+        print(f'Running tfidf on data_split {i}')
         start = time.time()
         pool = Pool(num_of_processes)
         data_split[i][col_out] = pool.map(func, data_split[i][col_in])
         pool.close()
         pool.join()
-        write_pickle(data_split[i], out_path, f'sentiment_{i}')
+        write_pickle(data_split[i], out_path, f'tfidf_{i}')
         end = time.time()
         print("-------------------------------------------")
         print("PPID %s Completed in %s" % (os.getpid(), round(end-start, 2)))
@@ -358,36 +479,22 @@ def count_vec_fun(df_col_in, name_in, out_path_in, sw_in, min_in, max_in):
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.feature_extraction.text import CountVectorizer
     import pandas as pd
+    from nltk.corpus import stopwords
+    
+    # Remove stop words
+    stop_words = set(stopwords.words('english'))
+    df_col_in = df_col_in.apply(lambda x: ' '.join([word for word in x.split() if word.lower() not in stop_words]))
+   
     if sw_in == "tf-idf":
-        cv = TfidfVectorizer(ngram_range=(min_in, max_in))
+        # Apply frequency-based feature selection
+        cv = TfidfVectorizer(max_df=0.8, min_df=2, ngram_range=(min_in, max_in))
     else:
         cv = CountVectorizer(ngram_range=(min_in, max_in))
     xform_data = pd.DataFrame(cv.fit_transform(df_col_in).toarray()) #be careful
     #takes up memory when force from sparse to dense
-    xform_data.columns = cv.get_feature_names()
+    xform_data.columns = cv.get_feature_names_out()
     write_pickle(cv, out_path_in, name_in)
     return xform_data
-
-def chi_fun(df_in, label_in, name_in, out_path_in, num_feat):
-    #chi-square
-    from sklearn.feature_selection import chi2
-    from sklearn.feature_selection import SelectKBest
-    import pandas as pd
-    feat_sel = SelectKBest(score_func=chi2, k=num_feat)
-    dim_data = pd.DataFrame(feat_sel.fit_transform(df_in, label_in))
-    feat_index = feat_sel.get_support(indices=True)
-    feature_names = df_in.columns[feat_index]
-    dim_data.columns = feature_names
-    write_pickle(feat_sel, out_path_in, name_in)
-    return dim_data
-
-def cosine_fun(df_in, idx_in):
-    from sklearn.metrics.pairwise import cosine_similarity
-    import pandas as pd
-    cos_sim = pd.DataFrame(cosine_similarity(df_in, df_in))
-    cos_sim.index = idx_in
-    cos_sim.columns = idx_in
-    return cos_sim
 
 def extract_embeddings_pre(df_in, num_vec_in, path_in, filename):
     #from gensim.models import Word2Vec
@@ -476,14 +583,14 @@ def model_test_train_fun(df_in, label_in, test_size_in, path_in, xform_in):
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import precision_recall_fscore_support
     import pandas as pd 
-    my_model = RandomForestClassifier(random_state=123)
+    my_model = RandomForestClassifier(n_estimators=200, random_state=123)
     
     X_train, X_test, y_train, y_test = train_test_split(
         df_in, label_in, test_size=test_size_in, random_state=42)
     
     #lets see how balanced the data is
-    agg_cnts = pd.DataFrame(y_train).groupby('label')['label'].count()
-    print (agg_cnts)
+    #agg_cnts = pd.DataFrame(y_train).groupby('label')['label'].count()
+    #print (agg_cnts)
     
     my_model.fit(X_train, y_train)
     
@@ -558,13 +665,3 @@ def grid_fun(df_in, label_in, test_size_in, path_in, xform_in, grid_d, cv_in):
         print ("can't get features")
         pass
     return fi
-
-# def count_vec_fun(df_col_in, name_in, out_path_in):
-#     from sklearn.feature_extraction.text import CountVectorizer
-#     import pandas as pd
-#     cv = CountVectorizer()
-#     xform_data = pd.DataFrame(cv.fit_transform(df_col_in).toarray()) #be careful
-#     col_names = cv.get_feature_names()
-#     xform_data.columns = col_names
-#     write_pickle(cv, out_path_in, name_in)
-#     return xform_data

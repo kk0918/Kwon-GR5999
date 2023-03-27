@@ -50,8 +50,10 @@ if __name__ == '__main__':
     """ 
         Preprocess the text of the film scripts
     """
-
-
+    # processed_script_df = preprocess_film_scripts_df(movie_dc_before_preprocessing_df)
+    # To test preprocessing set .head and exit after
+    #exit
+    
     if WRITE_NEW_PREPROCESSED_FILM_DF:
         processed_script_df = preprocess_film_scripts_df(movie_dc_before_preprocessing_df)
         
@@ -59,72 +61,111 @@ if __name__ == '__main__':
             processed_script_df['preprocessed_dc_score'] = processed_script_df.film_scripts_processed.apply(calculate_dc_score)
             
         write_pickle(processed_script_df, out_path, 'movie_scripts_dc_after_preprocessing_df')
-        
-    preprocessed_df = read_pickle(out_path, 'movie_scripts_dc_after_preprocessing_df')
     
+    preprocessed_df = read_pickle(out_path, 'movie_scripts_dc_after_preprocessing_df')
+        
     # Just preprocessing film titles
     processed_rt_df = preprocess_rt_df(rotten_tomatoes_df)
     
-    """ 
-        Use Shapiro wilk Test to determine if it is normally distributed to determine whether to cut by mean
     """
-    normally_distrubted = shapiro_wilk_test(preprocessed_df, "preprocessed_dc_score")
+        Medians and describe
+    """
+    print("Describe pre_preprocessing_dc_score")
+    preprocessed_df["pre_preprocessing_dc_score"].describe()
+    print("Before Preprocessed DC MEDIAN: " + str(preprocessed_df["pre_preprocessing_dc_score"].median()))
+         
+    print("Describe preprocessed_dc_score")
+    preprocessed_df["preprocessed_dc_score"].describe()
+    print("After Preprocessed DC MEDIAN: " + str(preprocessed_df["preprocessed_dc_score"].median()))
     
+    
+    """
+        Plot images
+    """
+    plot_hist_dc_scores(preprocessed_df, "pre_preprocessing_dc_score", "Distribution of Raw Film Script Dale-Chall Scores")
+    plot_hist_dc_scores(preprocessed_df, "preprocessed_dc_score", "Distribution of Preprocessed Film Script Dale-Chall Scores")
+
+    
+    """ 
+       Use Shapiro wilk Test to determine if it is normally distributed to determine whether to cut by mean
+    """
+    normally_distributed = shapiro_wilk_test(preprocessed_df, "preprocessed_dc_score")
+   
+    median_score_dc_score = preprocessed_df["preprocessed_dc_score"].median()
+    print("MEDIAN OF MERGED: " + str(median_score_dc_score))
+    print("GREATER THAN MEDIAN: " + str(len(preprocessed_df[preprocessed_df['preprocessed_dc_score'] >= median_score_dc_score])))
+    print("LESS THAN MEDIAN: " + str(len(preprocessed_df[preprocessed_df['preprocessed_dc_score'] < median_score_dc_score])))
+ 
+
+    """
+       Binary Classification for DC score
+       Change with appropriate halfway point POST preprocessing 
+    """
+    
+    preprocessed_df['binary_dc'] = preprocessed_df['preprocessed_dc_score'].apply(lambda x: 1 if x >= median_score_dc_score else 0)
+   
+      
+    """
+       Tune RF Model
+    """
+  
+    my_vec = count_vec_fun(
+        preprocessed_df.film_scripts_processed, "vec", out_path, "tf-idf", 1, 1)
+      
+    print("TUNING RF MODEL")
+    tuned_rf_model = tune_rf_model(my_vec, preprocessed_df.binary_dc, 0.2)
+      
+    fi_fun = model_test_train_fun(tuned_rf_model, my_vec, preprocessed_df.binary_dc, 0.2, out_path, "vec")
+
+
+
     """
         Merge film_scripts and RT scores and get count of unmatched 
     """
     merged_rt_and_scripts_df = preprocessed_df.merge(processed_rt_df, how='left', left_on=['movie_titles_stripped'], right_on=['movie_titles_stripped'])
     print(merged_rt_and_scripts_df.runtime.isnull().sum(axis = 0))
-    
-    """
-        Get Genre Counts - note movies fall under several genres 
-    """
-    genre_count = count_movies_per_genre(merged_rt_and_scripts_df)
-    
-    
-    
     # Print unmatched with rt df film scripts
     find_non_matching = merged_rt_and_scripts_df[merged_rt_and_scripts_df.runtime.isna()]["movie_titles_stripped"]
     
-    #sys.exit()
+    # DROP all with same movie name - this is because for film scripts the only source we have is the name
+    merged_rt_and_scripts_df.drop_duplicates(subset=['movie_titles_stripped'], keep=False, inplace=True)
+    # DROP all rows with no runtime because this indicates they did not match
+    merged_rt_and_scripts_df = merged_rt_and_scripts_df.dropna(subset=['runtime'])
+    print(merged_rt_and_scripts_df.runtime.isnull().sum(axis = 0))
+    """
+        Get Genre Counts - note movies fall under several genres 
+    """
+    dc_and_genre_count = count_dc_scores_per_genre(merged_rt_and_scripts_df)
     
+    # Plots
+    plot_genre_dc_scores(dc_and_genre_count)
+    
+        
     # Just seeing how many film scripts have the greatest percentage of uppercase letters
     #processed_script_df["percent_upper"] = processed_script_df.film_scripts_processed.apply(percentage)
     #find_too_many_upper = processed_script_df[processed_script_df.percent_upper > 20][["movie_titles_stripped","percent_upper"]]
     
     # TF-IDF
-    # Apply the function to each row of the DataFrame using parallel processing
-    """
-        Binary Classification for DC score
-        Change with appropriate halfway point POST preprocessing 
-    """
-    preprocessed_df['binary_dc'] = preprocessed_df['pre_preprocessing_dc_score'].apply(lambda x: 1 if x > 8 else 0)
  
     """ 
       Prep Binary RF Classification Model
     """
-    # Add the results to the DataFrame
-    #processed_script_df['tfidf_matrix']  =  processed_script_df.movie_scripts.apply(process_tfidf)
-    # test_df = processed_script_df.head(5)
-    # Split the dataset into a binary classification of "low" and "high" dc scores
-    #parallelize_write_tfidf_pickles(processed_script_df.head(100), "movie_scripts", "tfidf_matrix", out_path, process_tfidf, NUM_OF_PROCESSES, 8)
-    #tfidf_df = merge_pickle_dfs('tfidf_', 8, out_path)
-    print("HERE") 
 
     #my_vec = merge_pickle_dfs('my_vec_', split_size, out_path)
+    """
     my_vec = count_vec_fun(
         preprocessed_df.movie_scripts, "vec", out_path, "tf-idf", 1, 1)
     print("HERE 2")
+    fi_fun = model_test_train_fun(my_vec, preprocessed_df.binary_dc, 0.2, out_path, "vec")
+    """
     # Save into pickle 
     #write_pickle(processed_script_df, out_path, 'movie_scripts_tfidf_df')
-    fi_fun = model_test_train_fun(my_vec, preprocessed_df.binary_dc, 0.2, out_path, "vec")
+  
     #build_binary_rf(tfidf_df, "tfidf_matrix", "binary_dc")
     
-    """
-        Tune RF Model
-    """
-    
+
     
     """
         Lime
     """
+    #use_lime(tuned_rf_model, my_vec, preprocessed_df.binary_dc, 0.2)

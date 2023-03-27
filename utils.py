@@ -6,6 +6,7 @@ Created on Mon Oct  3 20:31:11 2022
 """
 import nltk
 import pandas as pd
+from plotnine import *
 
 def build_binary_rf(df, feature_col, target_col):
     import numpy as np
@@ -62,9 +63,6 @@ def preprocess_film_scripts_df(df_in):
     
     # Manual Fixes
     processed_df.loc[processed_df["movie_titles_stripped"] == "terminator 2 judgement day", "movie_titles_stripped"] = 'terminator 2 judgment day'
-    processed_df.loc[processed_df["movie_titles_stripped"] == "lord of the rings fellowship of the ring", "movie_titles_stripped"] = 'lord of rings fellowship of ring'
-    processed_df.loc[processed_df["movie_titles_stripped"] == "lord of rings two towers", "movie_titles_stripped"] = 'lord of rings two towers'
-    processed_df.loc[processed_df["movie_titles_stripped"] == "lord of rings return of king", "movie_titles_stripped"] = 'lord of rings return of king'
     processed_df.loc[processed_df["movie_titles_stripped"] == "star wars phantom menace", "movie_titles_stripped"] = 'star wars episode i phantom menace'
     processed_df.loc[processed_df["movie_titles_stripped"] == "star wars revenge of sith", "movie_titles_stripped"] = 'star wars episode iii revenge of sith'
     processed_df.loc[processed_df["movie_titles_stripped"] == "star wars return of jedi", "movie_titles_stripped"] = 'star wars episode vi return of jedi'
@@ -79,16 +77,27 @@ def preprocess_film_scripts_df(df_in):
     processed_df.loc[processed_df["movie_titles_stripped"] == "halloween curse of michael myers", "movie_titles_stripped"] = 'halloween curse of michael myers halloween 6'
     processed_df.loc[processed_df["movie_titles_stripped"] == "jurassic park lost world", "movie_titles_stripped"] = 'lost world jurassic park'
     processed_df.loc[processed_df["movie_titles_stripped"] == "harold and kumar go to white castle", "movie_titles_stripped"] = 'harold kumar go to white castle'
-    processed_df.loc[processed_df["movie_titles_stripped"] == "chronicles of narnia lion witch and wardrobe", "movie_titles_stripped"] = 'chronicles of narnia lion witch and wardrobe'
-
+    processed_df.loc[processed_df["movie_titles_stripped"] == "alien 3", "movie_titles_stripped"] = 'alien3'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "men in black 3", "movie_titles_stripped"] = 'men in black iii'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "ringu", "movie_titles_stripped"] = 'ringu ring'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "south park", "movie_titles_stripped"] = 'south park bigger longer uncut'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "sandlot kids", "movie_titles_stripped"] = 'sandlot'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "mission impossible ii", "movie_titles_stripped"] = 'mission impossible 2'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "gremlins 2", "movie_titles_stripped"] = 'gremlins 2 new batch'
+    processed_df.loc[processed_df["movie_titles_stripped"] == "precious", "movie_titles_stripped"] = 'precious based on novel push by sapphire'
+    
+    
     # remove words in parentheses from film scripts since these are not spoken
     processed_df["film_scripts_processed"] = processed_df.movie_scripts.apply(remove_parens)
+    # Remove text following INT. or EXT. up to first punctuation mark or uppcase followed by lower case or lower case
+    processed_df["film_scripts_processed"] = processed_df.film_scripts_processed.apply(remove_int_ext)
     # remove all capital letters followed by a colon
     processed_df["film_scripts_processed"] = processed_df.film_scripts_processed.apply(remove_names)
+    # Add space after punctuations in case words are stuck. this helps sent_tokenize in the next step
+    processed_df["film_scripts_processed"] = processed_df.film_scripts_processed.apply(add_space_after_punctuations)
     # Remove stuck words
     processed_df["film_scripts_processed"] = processed_df.film_scripts_processed.apply(split_stuck_words)
-
-    #write_pickle(processed_df, out_path, name_in)
+    
     return processed_df
 
 # Preprocess rotten tomatoes
@@ -103,9 +112,11 @@ def preprocess_rt_df(df_in):
 def remove_names(sent_in):
     import re
     # Remove any text in all caps followed by a colon
-    sent_clean = re.sub(r'[A-Z]+:', '', sent_in)
+    sent_clean = re.sub(r'[A-Z]+:', ' ', sent_in)
+    # Remove apostrophes from words in all caps
+    sent_clean = re.sub(r"\b[A-Z]+'?[A-Z]*\b", lambda match: match.group().replace("'", ""), sent_clean)
     # Remove ALL Caps of length at least 2 and leave the rest
-    sent_clean = re.sub(r'\b[A-Z]{2,}\b', '', sent_clean)
+    sent_clean = re.sub( r'[A-Z]{2,}(?![a-z])', ' ', sent_clean)
     return sent_clean
 
 def get_all_genres(df):
@@ -115,14 +126,24 @@ def get_all_genres(df):
     unique_genres = set(genres_list_exploded)
     return unique_genres
 
-def count_movies_per_genre(df):
+def count_movies_per_genre(df_in):
+    genre_df = df_in.copy()
     # Split the genres column by comma, strip whitespace, and create a new dataframe with binary indicator variables
-    genre_df = df['genres'].str.replace(',\s+', ',', regex=True).str.get_dummies(sep=',')
-    
+    genre_df = genre_df['genres'].str.replace(',\s+', ',', regex=True).str.get_dummies(sep=',')
+   
     # Compute the count of movies for each genre
     genre_counts = genre_df.sum().sort_values(ascending=False)
-    
+
     return genre_counts
+
+def count_dc_scores_per_genre(df_in):
+    genre_df = df_in.copy()
+    genre_df['genres'] = genre_df['genres'].str.split(', ')
+    df_exploded = genre_df.explode('genres')
+    
+    genre_stats = df_exploded.groupby('genres').agg({'genres': 'count', 'preprocessed_dc_score': 'mean'})
+    genre_stats = genre_stats.rename(columns={'genres': 'count', 'preprocessed_dc_score': 'mean_dc_score'})
+    return genre_stats
     
 def shapiro_wilk_test(df, column_name):
     import scipy.stats as stats
@@ -139,6 +160,39 @@ def shapiro_wilk_test(df, column_name):
         
     return normally_distributed
 
+def plot_hist_dc_scores(df, col_in, title):
+    hist_plot = (
+        ggplot(df, aes(x=col_in)) + 
+        geom_histogram(color="black", bins=20, alpha=0.7, fill="#0072B2") +
+        labs(title=title, x="Dale-Chall Scores", y="Frequency"))
+    print(hist_plot)
+    
+def plot_genre_dc_scores(df_in):
+    genre_df = df_in.copy()
+    genre_df = genre_df.reset_index().rename(columns={'index': 'genres'})
+
+    genre_df = genre_df.sort_values(by="mean_dc_score")
+    
+    bar_plot = (
+        ggplot(genre_df, aes(x="reorder(genres, mean_dc_score)", y="mean_dc_score")) + 
+        geom_col(fill='#0000CC') + 
+        coord_flip() +
+        labs(title='Mean Dale-Chall Scores by Genre', x='Genre', y='Mean Score') + 
+        theme_bw())
+    
+    print(bar_plot)
+    
+
+def remove_parens(sent_in):
+    import re
+    sent_clean =  re.sub("[\(\[].*?[\)\]]", " ", sent_in)
+    return sent_clean
+
+def add_space_after_punctuations(sent_in):
+    import re
+    sent_clean = re.sub(r'([\.\?!])(?=[A-Z])', r'\1 ', sent_in)
+    return sent_clean
+
 # Split stuck words such as "systemcontrolled" or "Jedibecome" using wordninja
 def split_stuck_words(text):
     import wordninja
@@ -147,23 +201,31 @@ def split_stuck_words(text):
     sentences_out = []
     
     arr_sentences = tokenize.sent_tokenize(text)
-    
     for sent in arr_sentences:
         my_sent_split = wordninja.split(sent)
-        
+            
 
         fixed_sentence = ""
-        # Check if last char is punctuation so we can add to wordnina split
+        # Check if last char is punctuation so we can add to wordninja split
         if sent and sent[-1] and sent[-1][-1].strip() in ",.;:!?":
             last_word = sent[-1]
             last_char = last_word[-1]
             fixed_sentence = " ".join(my_sent_split) + last_char
         else:
             fixed_sentence = " ".join(my_sent_split)
+        
             
         sentences_out.append(fixed_sentence.strip())
 
     return " ".join(sentences_out)
+
+def remove_int_ext(text):
+    import re
+    #int_or_ext_pattern = '(INT\.|EXT\..*?)(?=\s*-?\s*[A-Z][a-z])'
+    #int_or_ext_pattern = r'(INT\.|EXT\.)(?=\s*-?\s*[A-Z][a-z])|\b[A-Z][a-z]*([A-Z](?![a-z]))?\b'
+    int_or_ext_pattern =  '(INT\.|EXT\.).*?(?=\s*[A-Z][a-z])|\b([A-Z][a-z]*[A-Z])\b'
+    replaced_text = re.sub(int_or_ext_pattern, r'\2', text, flags=re.DOTALL)
+    return replaced_text
 
 
 # Custom helper functions for film scripts
@@ -183,11 +245,6 @@ def clean_film_titles(sent_in):
     sent_clean =  re.sub("[\(\[].*?[\)\]]", "", sent_clean)
     # Strip the sentences
     sent_clean = sent_clean.strip()
-    return sent_clean
-
-def remove_parens(sent_in):
-    import re
-    sent_clean =  re.sub("[\(\[].*?[\)\]]", "", sent_in)
     return sent_clean
 
 def calculate_dc_score(text_in):
@@ -218,7 +275,6 @@ def write_new_film_df_pickle(film_scripts_dir, out_path):
                  movie_titles.append(name)
                  movie_scripts.append(text)
                  
-                 print(name)
              except Exception as e:
                  print(e)
                  err_count+=1
@@ -577,26 +633,60 @@ def sparse_pca_fun(df_in, target_component, path_o, name_in):
     write_pickle(dim_red, path_o, name_in)
     return red_data
 
-def model_test_train_fun(df_in, label_in, test_size_in, path_in, xform_in):
+def tune_rf_model(df_in, label_in, test_size_in):
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import precision_recall_fscore_support
+    from sklearn.model_selection import GridSearchCV
+    import numpy as np
+    import pandas as pd 
+        
+    X_train, X_test, y_train, y_test = train_test_split(
+        df_in, label_in, test_size=test_size_in, random_state=42)
+    
+    """
+        TUNE
+    """
+    print("TUNING")
+    # Random Forest Classifer
+    param_grid = {'n_estimators': np.arange(1,40,5),
+                  'max_depth': np.arange(1,20,2)}    
+    
+    random_forest_classifier = GridSearchCV(RandomForestClassifier(random_state=25), param_grid=param_grid, cv=10)
+    
+    # Random Forest does not require scaled data 
+    random_forest_classifier.fit(X_train, y_train)
+    
+    print("best mean cross-validation score: {:.3f}".format(random_forest_classifier.best_score_))
+    print("best parameters: {}".format(random_forest_classifier.best_params_))
+    
+    # Return the best model
+    best_rf_model = random_forest_classifier.best_estimator_
+    return best_rf_model
+    
+def model_test_train_fun(rf_in, df_in, label_in, test_size_in, path_in, xform_in):
     #TRAIN AN ALGO USING my_vec
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import precision_recall_fscore_support
+    from sklearn.model_selection import GridSearchCV
+    import numpy as np
     import pandas as pd 
+
+    """
     my_model = RandomForestClassifier(n_estimators=200, random_state=123)
     
     X_train, X_test, y_train, y_test = train_test_split(
         df_in, label_in, test_size=test_size_in, random_state=42)
     
-    #lets see how balanced the data is
-    #agg_cnts = pd.DataFrame(y_train).groupby('label')['label'].count()
-    #print (agg_cnts)
-    
     my_model.fit(X_train, y_train)
+    """
+    X_train, X_test, y_train, y_test = train_test_split(
+        df_in, label_in, test_size=test_size_in, random_state=42)
     
-    y_pred = my_model.predict(X_test)
-    y_pred_proba = pd.DataFrame(my_model.predict_proba(X_test))
-    y_pred_proba.columns = my_model.classes_
+    y_pred = rf_in.predict(X_test)
+    y_pred_proba = pd.DataFrame(rf_in.predict_proba(X_test))
+    y_pred_proba.columns = rf_in.classes_
     
     metrics = pd.DataFrame(precision_recall_fscore_support(
         y_test, y_pred, average='weighted'))
@@ -606,7 +696,7 @@ def model_test_train_fun(df_in, label_in, test_size_in, path_in, xform_in):
     the_feats = read_pickle(path_in, xform_in)
     try:
         #feature importance
-        fi = pd.DataFrame(my_model.feature_importances_)
+        fi = pd.DataFrame(rf_in.feature_importances_)
         fi["feat_imp"] = the_feats.get_feature_names()
         fi.columns = ["feat_imp", "feature"]
         perc_propensity = len(fi[fi.feat_imp > 0]) / len(fi)
@@ -615,6 +705,25 @@ def model_test_train_fun(df_in, label_in, test_size_in, path_in, xform_in):
         print ("can't get features")
         pass
     return fi
+
+def use_lime(rf_in, df_in, label_in, test_size_in):
+    from sklearn.model_selection import train_test_split
+    import lime
+    import lime.lime_tabular
+    import numpy as np
+    import pandas as pd
+    print("LIME")
+    X_train, X_test, y_train, y_test = train_test_split(
+        df_in, label_in, test_size=test_size_in, random_state=42)
+    class_names = ['0', '1']
+    explainer = lime.lime_tabular.LimeTabularExplainer(X_train.values, feature_names=X_train.columns.values, class_names=class_names)
+
+    exp = explainer.explain_instance(X_test.values[0], rf_in.predict_proba, num_features=len(X_train.columns))
+    
+    # Print the top features contributing to the predicted class
+    print('Explanation for class %s' % class_names[y_test[0]])
+    for i in range(len(exp.as_list())):
+        print(exp.as_list()[i])
 
 def grid_fun(df_in, label_in, test_size_in, path_in, xform_in, grid_d, cv_in):
     #TRAIN AN ALGO USING my_vec

@@ -182,6 +182,17 @@ def plot_genre_dc_scores(df_in):
     
     print(bar_plot)
     
+def plot_feature_importance(df_in):
+    feature_df = df_in.copy()
+    
+    feature_plot = (
+        ggplot(feature_df, aes(x='reorder(feature, feature_importance)', y='feature_importance')) + 
+        geom_bar(stat='identity', fill="#0072B2") + ggtitle('Top 20 Feature Importances') + 
+        xlab('Feature') + 
+        ylab('Importance') + 
+        theme(axis_text_x = element_text(angle = 270)))
+    
+    print(feature_plot)
 
 def remove_parens(sent_in):
     import re
@@ -531,7 +542,7 @@ def sent_fun(str_in):
     ex = senti.polarity_scores(str_in)["compound"]
     return ex
 
-def count_vec_fun(df_col_in, name_in, out_path_in, sw_in, min_in, max_in):
+def count_vec_fun(df_col_in, name_in, out_path_in, sw_in, min_in=1, max_in=1):
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.feature_extraction.text import CountVectorizer
     import pandas as pd
@@ -539,17 +550,19 @@ def count_vec_fun(df_col_in, name_in, out_path_in, sw_in, min_in, max_in):
     
     # Remove stop words
     stop_words = set(stopwords.words('english'))
+    # Ignore numbers from this
+    pattern = r'\b[A-Za-z]{2,}\b'
     df_col_in = df_col_in.apply(lambda x: ' '.join([word for word in x.split() if word.lower() not in stop_words]))
    
     if sw_in == "tf-idf":
         # Apply frequency-based feature selection
-        cv = TfidfVectorizer(max_df=0.8, min_df=2, ngram_range=(min_in, max_in))
+        cv = TfidfVectorizer(token_pattern=pattern, max_df=0.8, min_df=2, ngram_range=(min_in, max_in))
     else:
         cv = CountVectorizer(ngram_range=(min_in, max_in))
     xform_data = pd.DataFrame(cv.fit_transform(df_col_in).toarray()) #be careful
     #takes up memory when force from sparse to dense
     xform_data.columns = cv.get_feature_names_out()
-    write_pickle(cv, out_path_in, name_in)
+    #write_pickle(cv, out_path_in, name_in)
     return xform_data
 
 def extract_embeddings_pre(df_in, num_vec_in, path_in, filename):
@@ -649,20 +662,26 @@ def tune_rf_model(df_in, label_in, test_size_in):
     """
     print("TUNING")
     # Random Forest Classifer
-    param_grid = {'n_estimators': np.arange(1,40,5),
-                  'max_depth': np.arange(1,20,2)}    
+    param_grid = {'n_estimators': np.arange(1,50,9),
+                  'max_depth': np.arange(1,6,2)}    
     
-    random_forest_classifier = GridSearchCV(RandomForestClassifier(random_state=25), param_grid=param_grid, cv=10)
+    #random_forest_classifier = GridSearchCV(RandomForestClassifier(random_state=25), param_grid=param_grid, cv=10)
+    
+    # TEST HARD CODE
+    random_forest_classifier = RandomForestClassifier(n_estimators = 37, max_depth = 5,random_state=25)
     
     # Random Forest does not require scaled data 
     random_forest_classifier.fit(X_train, y_train)
     
+    """
     print("best mean cross-validation score: {:.3f}".format(random_forest_classifier.best_score_))
     print("best parameters: {}".format(random_forest_classifier.best_params_))
     
     # Return the best model
     best_rf_model = random_forest_classifier.best_estimator_
     return best_rf_model
+    """
+    return random_forest_classifier
     
 def model_test_train_fun(rf_in, df_in, label_in, test_size_in, path_in, xform_in):
     #TRAIN AN ALGO USING my_vec

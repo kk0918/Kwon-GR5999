@@ -114,9 +114,31 @@ if __name__ == '__main__':
       
     print("TUNING RF MODEL")
     tuned_rf_model = tune_rf_model(my_vec, preprocessed_df.binary_dc, 0.2)
-      
-    fi_fun = model_test_train_fun(tuned_rf_model, my_vec, preprocessed_df.binary_dc, 0.2, out_path, "vec")
+    
+    
+    """
+        Feature importance
+    """
+    
+    # Get feature importances and sort them in descending order
+    feature_importances = tuned_rf_model.feature_importances_
+    feature_names = my_vec.columns
+    sorted_idx = np.argsort(feature_importances)[::-1]
+    
+    # Create top 20 most important features DF 
+    import matplotlib.pyplot as plt
+    top_features_num = 20
+    top_feature_df = pd.DataFrame(columns=['feature', 'feature_importance'])
+    print("Top 20 features:")
+    for i in range(20):
+        top_feature_df = top_feature_df.append({'feature': feature_names[sorted_idx[i]], 'feature_importance': feature_importances[sorted_idx[i]]}, ignore_index=True)
+        print(f"{i+1}. {feature_names[sorted_idx[i]]}: {feature_importances[sorted_idx[i]]:.4f}")
 
+    # Visualize the feature importances
+    plot_feature_importance(top_feature_df)
+
+    
+    fi_fun = model_test_train_fun(tuned_rf_model, my_vec, preprocessed_df.binary_dc, 0.2, out_path, "vec")
 
 
     """

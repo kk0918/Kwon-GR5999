@@ -33,7 +33,7 @@ if __name__ == '__main__':
     WRITE_NEW_FILM_DF_PICKLE = False
     WRITE_NEW_NOT_PREPROCESSED_FILM_DF = False
     WRITE_NEW_PREPROCESSED_FILM_DF = False
-    WRITE_NEW_DALE_CHALL_DF = False
+    #WRITE_NEW_DALE_CHALL_DF = False
     NUM_OF_PROCESSES = 4
     
     if WRITE_NEW_FILM_DF_PICKLE:
@@ -50,22 +50,15 @@ if __name__ == '__main__':
     """ 
         Preprocess the text of the film scripts
     """
-    # processed_script_df = preprocess_film_scripts_df(movie_dc_before_preprocessing_df)
-    # To test preprocessing set .head and exit after
-    #exit
-    
+
     if WRITE_NEW_PREPROCESSED_FILM_DF:
-        processed_script_df = preprocess_film_scripts_df(movie_dc_before_preprocessing_df)
-        
-        if WRITE_NEW_DALE_CHALL_DF:
-            processed_script_df['preprocessed_dc_score'] = processed_script_df.film_scripts_processed.apply(calculate_dc_score)
-            
-        write_pickle(processed_script_df, out_path, 'movie_scripts_dc_after_preprocessing_df')
-    
+        processed_script_df = preprocess_film(movie_dc_before_preprocessing_df, 'movie_scripts_dc_after_preprocessing_df')
+
     preprocessed_df = read_pickle(out_path, 'movie_scripts_dc_after_preprocessing_df')
         
     # Just preprocessing film titles
     processed_rt_df = preprocess_rt_df(rotten_tomatoes_df)
+    
     
     """
         Medians and describe
@@ -119,28 +112,37 @@ if __name__ == '__main__':
     """
         Feature importance
     """
-    
-    # Get feature importances and sort them in descending order
-    feature_importances = tuned_rf_model.feature_importances_
-    feature_names = my_vec.columns
-    sorted_idx = np.argsort(feature_importances)[::-1]
-    
-    # Create top 20 most important features DF 
-    import matplotlib.pyplot as plt
-    top_features_num = 20
-    top_feature_df = pd.DataFrame(columns=['feature', 'feature_importance'])
-    print("Top 20 features:")
-    for i in range(20):
-        top_feature_df = top_feature_df.append({'feature': feature_names[sorted_idx[i]], 'feature_importance': feature_importances[sorted_idx[i]]}, ignore_index=True)
-        print(f"{i+1}. {feature_names[sorted_idx[i]]}: {feature_importances[sorted_idx[i]]:.4f}")
-
+    # Get Feature importance a
+    top_feature_df = get_feature_importance(tuned_rf_model, my_vec)
     # Visualize the feature importances
     plot_feature_importance(top_feature_df)
-
     
     fi_fun = model_test_train_fun(tuned_rf_model, my_vec, preprocessed_df.binary_dc, 0.2, out_path, "vec")
 
 
+    """
+        Top 20 features
+    """
+    top_feature_labels = top_feature_df.feature
+
+
+    # Create new DF with additional features 
+    df_with_top_20_words = my_vec[top_feature_labels]
+    df_with_only_features = preprocessed_df[["avg_sentence_len", "punctuation_count", "ttr", ]]
+    df_top_20_with_text = pd.concat([df_with_only_features, df_with_top_20_words], axis=1)
+
+    df_target = preprocessed_df[["binary_dc"]]
+
+    """
+        Create Model
+    """
+    
+    print("TUNING RF MODEL with Top 20")
+    top_20_rf_model = tune_rf_model(df_top_20_with_text, df_target.binary_dc, 0.2)
+    top_20_run = model_test_train_fun(top_20_rf_model, df_top_20_with_text, df_target.binary_dc, 0.2, out_path, "vec")
+
+    
+    
     """
         Merge film_scripts and RT scores and get count of unmatched 
     """
@@ -167,24 +169,7 @@ if __name__ == '__main__':
     #processed_script_df["percent_upper"] = processed_script_df.film_scripts_processed.apply(percentage)
     #find_too_many_upper = processed_script_df[processed_script_df.percent_upper > 20][["movie_titles_stripped","percent_upper"]]
     
-    # TF-IDF
- 
-    """ 
-      Prep Binary RF Classification Model
-    """
 
-    #my_vec = merge_pickle_dfs('my_vec_', split_size, out_path)
-    """
-    my_vec = count_vec_fun(
-        preprocessed_df.movie_scripts, "vec", out_path, "tf-idf", 1, 1)
-    print("HERE 2")
-    fi_fun = model_test_train_fun(my_vec, preprocessed_df.binary_dc, 0.2, out_path, "vec")
-    """
-    # Save into pickle 
-    #write_pickle(processed_script_df, out_path, 'movie_scripts_tfidf_df')
-  
-    #build_binary_rf(tfidf_df, "tfidf_matrix", "binary_dc")
-    
 
     
     """

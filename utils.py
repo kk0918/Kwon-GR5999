@@ -8,6 +8,46 @@ import nltk
 import pandas as pd
 from plotnine import *
 
+
+def preprocess_film(movie_dc_before_preprocessing_df, pickle_name):
+    """
+        Run all the film script preprocessing steps
+    """
+    processed_script_df = preprocess_film_scripts_df(movie_dc_before_preprocessing_df)
+        
+
+    processed_script_df['preprocessed_dc_score'] = processed_script_df.film_scripts_processed.apply(calculate_dc_score)
+        
+    """
+        Add new feaures such as average sentence length
+    """
+    # Average sentence length
+    processed_script_df["avg_sentence_len"] = processed_script_df.film_scripts_processed.apply(calc_avg_sentence_length)
+    processed_script_df["punctuation_count"] = processed_script_df.film_scripts_processed.apply(calc_punctuation_frequency)
+    processed_script_df["ttr"] = processed_script_df.film_scripts_processed.apply(calc_ttr)
+        
+    write_pickle(processed_script_df, out_path, pickle_name)
+    
+    return processed_script_df 
+    
+def get_feature_importance(tuned_rf_model, my_vec):
+    import numpy as np
+    import matplotlib.pyplot as plt
+    # Get feature importances and sort them in descending order
+    feature_importances = tuned_rf_model.feature_importances_
+    feature_names = my_vec.columns
+    sorted_idx = np.argsort(feature_importances)[::-1]
+    
+    # Create top 20 most important features DF 
+    top_features_num = 20
+    top_feature_df = pd.DataFrame(columns=['feature', 'feature_importance'])
+    print("Top 20 features:")
+    for i in range(20):
+        top_feature_df = top_feature_df.append({'feature': feature_names[sorted_idx[i]], 'feature_importance': feature_importances[sorted_idx[i]]}, ignore_index=True)
+        print(f"{i+1}. {feature_names[sorted_idx[i]]}: {feature_importances[sorted_idx[i]]:.4f}")
+    
+    return top_feature_df
+
 def build_binary_rf(df, feature_col, target_col):
     import numpy as np
     from sklearn.ensemble import RandomForestClassifier
@@ -118,6 +158,32 @@ def remove_names(sent_in):
     # Remove ALL Caps of length at least 2 and leave the rest
     sent_clean = re.sub( r'[A-Z]{2,}(?![a-z])', ' ', sent_clean)
     return sent_clean
+
+def calc_avg_sentence_length(col_in):
+    sentences = nltk.sent_tokenize(col_in)
+    word_count = [len(sentence.split()) for sentence in sentences]
+    avg_sen_length = sum(word_count) / len(word_count)
+    return avg_sen_length
+
+def calc_punctuation_frequency(col_in):
+    import re
+    import string
+    # Punctuation includes !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
+    #punctuation_count = sum(col_in.count(char) for char in string.punctuation)
+    punct_pattern = re.compile(f"[{re.escape(string.punctuation)}]+")
+    punct_count = len(punct_pattern.findall(col_in))
+    #print(f"Punctuation Count: {punct_count}")
+    return punct_count
+
+def calc_ttr(col_in):
+    words = nltk.word_tokenize(col_in)
+    unique = set(words)
+    num_unique = len(unique)
+    total_words = len(words)
+    
+    ttr = num_unique / total_words 
+    return ttr
+
 
 def get_all_genres(df):
     genres_col = df['genres']
@@ -562,7 +628,6 @@ def count_vec_fun(df_col_in, name_in, out_path_in, sw_in, min_in=1, max_in=1):
     xform_data = pd.DataFrame(cv.fit_transform(df_col_in).toarray()) #be careful
     #takes up memory when force from sparse to dense
     xform_data.columns = cv.get_feature_names_out()
-    #write_pickle(cv, out_path_in, name_in)
     return xform_data
 
 def extract_embeddings_pre(df_in, num_vec_in, path_in, filename):
@@ -723,6 +788,7 @@ def model_test_train_fun(rf_in, df_in, label_in, test_size_in, path_in, xform_in
     except:
         print ("can't get features")
         pass
+    
     return fi
 
 def use_lime(rf_in, df_in, label_in, test_size_in):

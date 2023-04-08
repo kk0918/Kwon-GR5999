@@ -10,9 +10,8 @@ import pandas as pd
 import numpy as np
 import time
 import os
-from joblib import Parallel, delayed
 from readability import Readability
-
+from sklearn.model_selection import train_test_split
 
 if __name__ == '__main__':
     rotten_tomatoes_dataset_path = os.getcwd() + '/data/rotten_tomatoes_movies.csv'
@@ -34,6 +33,8 @@ if __name__ == '__main__':
     WRITE_NEW_NOT_PREPROCESSED_FILM_DF = False
     WRITE_NEW_PREPROCESSED_FILM_DF = False
     #WRITE_NEW_DALE_CHALL_DF = False
+    TESTING_SPLIT = 0.2
+    RANDOM_STATE = 42
     NUM_OF_PROCESSES = 4
     
     if WRITE_NEW_FILM_DF_PICKLE:
@@ -105,10 +106,16 @@ if __name__ == '__main__':
     my_vec = count_vec_fun(
         preprocessed_df.film_scripts_processed, "vec", out_path, "tf-idf", 1, 1)
       
-    print("TUNING RF MODEL")
-    tuned_rf_model = tune_rf_model(my_vec, preprocessed_df.binary_dc, 0.2)
+    print("TUNING RF MODEL FOR TOP 20 WORDS")
+    X_train_words, X_test_words, y_train_words, y_test_words = train_test_split(
+        my_vec, preprocessed_df.binary_dc, test_size=TESTING_SPLIT, random_state=RANDOM_STATE)
     
+    tuned_rf_model = tune_rf_model(my_vec, preprocessed_df.binary_dc, X_train_words, X_test_words, 
+                                   y_train_words, y_test_words)
     
+    fi_fun = model_test_train_fun(tuned_rf_model, my_vec, preprocessed_df.binary_dc, out_path, "vec",
+                                  X_train_words, X_test_words,  y_train_words, y_test_words)
+
     """
         Feature importance
     """
@@ -117,8 +124,6 @@ if __name__ == '__main__':
     # Visualize the feature importances
     plot_feature_importance(top_feature_df)
     
-    fi_fun = model_test_train_fun(tuned_rf_model, my_vec, preprocessed_df.binary_dc, 0.2, out_path, "vec")
-
 
     """
         Top 20 features
@@ -137,11 +142,15 @@ if __name__ == '__main__':
         Create Model
     """
     
-    print("TUNING RF MODEL with Top 20")
-    top_20_rf_model = tune_rf_model(df_top_20_with_text, df_target.binary_dc, 0.2)
-    top_20_run = model_test_train_fun(top_20_rf_model, df_top_20_with_text, df_target.binary_dc, 0.2, out_path, "vec")
-
+    print("TUNING RF MODEL W/ TOP 20 AND ADDITIONAL FEATURES")
+    X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl = train_test_split(
+        df_top_20_with_text, df_target.binary_dc, test_size=TESTING_SPLIT, random_state=RANDOM_STATE)
     
+    top_20_rf_model = tune_rf_model(df_top_20_with_text, df_target.binary_dc,
+                                    X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl)
+    top_20_run = model_test_train_fun(top_20_rf_model, df_top_20_with_text, df_target.binary_dc, out_path, "vec",
+                                      X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl)
+
     
     """
         Merge film_scripts and RT scores and get count of unmatched 

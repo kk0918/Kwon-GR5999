@@ -711,17 +711,13 @@ def sparse_pca_fun(df_in, target_component, path_o, name_in):
     write_pickle(dim_red, path_o, name_in)
     return red_data
 
-def tune_rf_model(df_in, label_in, test_size_in):
+def tune_rf_model(df_in, label_in, X_train, X_test, y_train, y_test):
     from sklearn.ensemble import RandomForestClassifier
-    from sklearn.model_selection import train_test_split
     from sklearn.metrics import precision_recall_fscore_support
     from sklearn.model_selection import GridSearchCV
     import numpy as np
     import pandas as pd 
         
-    X_train, X_test, y_train, y_test = train_test_split(
-        df_in, label_in, test_size=test_size_in, random_state=42)
-    
     """
         TUNE
     """
@@ -748,25 +744,14 @@ def tune_rf_model(df_in, label_in, test_size_in):
     """
     return random_forest_classifier
     
-def model_test_train_fun(rf_in, df_in, label_in, test_size_in, path_in, xform_in):
+def model_test_train_fun(rf_in, df_in, label_in, path_in, xform_in, X_train,
+                         X_test, y_train, y_test):
     #TRAIN AN ALGO USING my_vec
     from sklearn.ensemble import RandomForestClassifier
-    from sklearn.model_selection import train_test_split
     from sklearn.metrics import precision_recall_fscore_support
     from sklearn.model_selection import GridSearchCV
     import numpy as np
     import pandas as pd 
-
-    """
-    my_model = RandomForestClassifier(n_estimators=200, random_state=123)
-    
-    X_train, X_test, y_train, y_test = train_test_split(
-        df_in, label_in, test_size=test_size_in, random_state=42)
-    
-    my_model.fit(X_train, y_train)
-    """
-    X_train, X_test, y_train, y_test = train_test_split(
-        df_in, label_in, test_size=test_size_in, random_state=42)
     
     y_pred = rf_in.predict(X_test)
     y_pred_proba = pd.DataFrame(rf_in.predict_proba(X_test))

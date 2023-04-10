@@ -32,6 +32,8 @@ if __name__ == '__main__':
     WRITE_NEW_FILM_DF_PICKLE = False
     WRITE_NEW_NOT_PREPROCESSED_FILM_DF = False
     WRITE_NEW_PREPROCESSED_FILM_DF = False
+    TUNE_TOP_20 = False
+    TUNE_ADDTL_WITH_TOP_20 = False
     #WRITE_NEW_DALE_CHALL_DF = False
     TESTING_SPLIT = 0.2
     RANDOM_STATE = 42
@@ -110,8 +112,13 @@ if __name__ == '__main__':
     X_train_words, X_test_words, y_train_words, y_test_words = train_test_split(
         my_vec, preprocessed_df.binary_dc, test_size=TESTING_SPLIT, random_state=RANDOM_STATE)
     
-    tuned_rf_model = tune_rf_model(my_vec, preprocessed_df.binary_dc, X_train_words, X_test_words, 
-                                   y_train_words, y_test_words)
+    
+    if TUNE_TOP_20:
+        tuned_rf_model = tune_rf_model(my_vec, preprocessed_df.binary_dc, X_train_words, X_test_words, 
+                                   y_train_words, y_test_words, False)
+        write_pickle(tuned_rf_model, out_path, 'top_20_rf_model')
+    
+    tuned_rf_model = read_pickle(out_path, 'top_20_rf_model')
     
     fi_fun = model_test_train_fun(tuned_rf_model, my_vec, preprocessed_df.binary_dc, out_path, "vec",
                                   X_train_words, X_test_words,  y_train_words, y_test_words)
@@ -133,10 +140,15 @@ if __name__ == '__main__':
 
     # Create new DF with additional features 
     df_with_top_20_words = my_vec[top_feature_labels]
-    df_with_only_features = preprocessed_df[["avg_sentence_len", "punctuation_count", "ttr", ]]
+    df_with_only_features = preprocessed_df[["avg_sentence_len", "punctuation_count", "ttr"]]
     df_top_20_with_text = pd.concat([df_with_only_features, df_with_top_20_words], axis=1)
 
     df_target = preprocessed_df[["binary_dc"]]
+    
+    
+    # Check Pearson's coefficient
+    corr = df_target['binary_dc'].corr(df_top_20_with_text['avg_sentence_len'], method='pearson')
+    print("PEARSON CORRELATION COEFFICIENT BETWEEN DALE_CHALL AND AVG SEN LENGTH: ", corr)
 
     """
         Create Model
@@ -146,11 +158,25 @@ if __name__ == '__main__':
     X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl = train_test_split(
         df_top_20_with_text, df_target.binary_dc, test_size=TESTING_SPLIT, random_state=RANDOM_STATE)
     
-    top_20_rf_model = tune_rf_model(df_top_20_with_text, df_target.binary_dc,
-                                    X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl)
+    if TUNE_ADDTL_WITH_TOP_20:
+        top_20_rf_model = tune_rf_model(df_top_20_with_text, df_target.binary_dc,
+                                    X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl, True)
+        write_pickle(top_20_rf_model, out_path, 'top_20_addtl_rf_model')
+    
+    top_20_rf_model = read_pickle(out_path, 'top_20_addtl_rf_model')
+        
     top_20_run = model_test_train_fun(top_20_rf_model, df_top_20_with_text, df_target.binary_dc, out_path, "vec",
                                       X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl)
 
+
+    """
+        Feature importance of Model with Top 20 words and addtl features 
+    """
+    # Get Feature importance a
+    top_feature_with_addtl_feat_df = get_feature_importance(top_20_rf_model, df_top_20_with_text)
+    # Visualize the feature importances
+    plot_feature_importance(top_feature_with_addtl_feat_df)
+    
     
     """
         Merge film_scripts and RT scores and get count of unmatched 
@@ -165,6 +191,10 @@ if __name__ == '__main__':
     # DROP all rows with no runtime because this indicates they did not match
     merged_rt_and_scripts_df = merged_rt_and_scripts_df.dropna(subset=['runtime'])
     print(merged_rt_and_scripts_df.runtime.isnull().sum(axis = 0))
+    
+    
+    
+    
     """
         Get Genre Counts - note movies fall under several genres 
     """
@@ -174,14 +204,16 @@ if __name__ == '__main__':
     plot_genre_dc_scores(dc_and_genre_count)
     
         
-    # Just seeing how many film scripts have the greatest percentage of uppercase letters
-    #processed_script_df["percent_upper"] = processed_script_df.film_scripts_processed.apply(percentage)
-    #find_too_many_upper = processed_script_df[processed_script_df.percent_upper > 20][["movie_titles_stripped","percent_upper"]]
-    
-
-
-    
     """
         Lime
     """
-    #use_lime(tuned_rf_model, my_vec, preprocessed_df.binary_dc, 0.2)
+    # USE THIS FOR SOME LOCAL explanations of individual cases - change 0 
+    #use_lime(top_20_rf_model, df_top_20_with_text, df_target.binary_dc, 
+    #         X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl )
+    
+    
+    
+    
+    
+    
+    

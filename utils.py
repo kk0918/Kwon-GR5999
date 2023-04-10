@@ -711,38 +711,42 @@ def sparse_pca_fun(df_in, target_component, path_o, name_in):
     write_pickle(dim_red, path_o, name_in)
     return red_data
 
-def tune_rf_model(df_in, label_in, X_train, X_test, y_train, y_test):
+def tune_rf_model(df_in, label_in, X_train, X_test, y_train, y_test, large_param_grid):
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.metrics import precision_recall_fscore_support
     from sklearn.model_selection import GridSearchCV
     import numpy as np
     import pandas as pd 
-        
     """
         TUNE
     """
     print("TUNING")
     # Random Forest Classifer
-    param_grid = {'n_estimators': np.arange(1,50,9),
-                  'max_depth': np.arange(1,6,2)}    
     
-    #random_forest_classifier = GridSearchCV(RandomForestClassifier(random_state=25), param_grid=param_grid, cv=10)
+    if large_param_grid:
+        param_grid = {'n_estimators': np.arange(20,160,2),
+               'max_depth': np.arange(2,20,1)}
+    else:
+        param_grid = {'n_estimators': np.arange(20,70,2),
+                  'max_depth': np.arange(2,8,1)}    
+    
+    random_forest_classifier = GridSearchCV(RandomForestClassifier(random_state=25), param_grid=param_grid, cv=10)
     
     # TEST HARD CODE
-    random_forest_classifier = RandomForestClassifier(n_estimators = 37, max_depth = 5,random_state=25)
+    #random_forest_classifier = RandomForestClassifier(n_estimators = 37, max_depth = 5,random_state=25)
     
     # Random Forest does not require scaled data 
     random_forest_classifier.fit(X_train, y_train)
     
-    """
     print("best mean cross-validation score: {:.3f}".format(random_forest_classifier.best_score_))
     print("best parameters: {}".format(random_forest_classifier.best_params_))
     
     # Return the best model
     best_rf_model = random_forest_classifier.best_estimator_
+    print("FINISHED TUNING")
     return best_rf_model
-    """
-    return random_forest_classifier
+    
+    #return random_forest_classifier
     
 def model_test_train_fun(rf_in, df_in, label_in, path_in, xform_in, X_train,
                          X_test, y_train, y_test):
@@ -776,22 +780,21 @@ def model_test_train_fun(rf_in, df_in, label_in, path_in, xform_in, X_train,
     
     return fi
 
-def use_lime(rf_in, df_in, label_in, test_size_in):
+def use_lime(rf_in, df_in, label_in, X_train, X_test, y_train, y_test):
     from sklearn.model_selection import train_test_split
     import lime
     import lime.lime_tabular
     import numpy as np
     import pandas as pd
     print("LIME")
-    X_train, X_test, y_train, y_test = train_test_split(
-        df_in, label_in, test_size=test_size_in, random_state=42)
+
     class_names = ['0', '1']
     explainer = lime.lime_tabular.LimeTabularExplainer(X_train.values, feature_names=X_train.columns.values, class_names=class_names)
 
     exp = explainer.explain_instance(X_test.values[0], rf_in.predict_proba, num_features=len(X_train.columns))
     
     # Print the top features contributing to the predicted class
-    print('Explanation for class %s' % class_names[y_test[0]])
+    print('Explanation for class %s' % class_names[y_test.values[0]])
     for i in range(len(exp.as_list())):
         print(exp.as_list()[i])
 

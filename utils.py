@@ -9,7 +9,7 @@ import pandas as pd
 from plotnine import *
 
 
-def preprocess_film(movie_dc_before_preprocessing_df, pickle_name):
+def preprocess_film(movie_dc_before_preprocessing_df, pickle_name, out_path):
     """
         Run all the film script preprocessing steps
     """
@@ -23,9 +23,11 @@ def preprocess_film(movie_dc_before_preprocessing_df, pickle_name):
     """
     # Average sentence length
     processed_script_df["avg_sentence_len"] = processed_script_df.film_scripts_processed.apply(calc_avg_sentence_length)
-    processed_script_df["punctuation_count"] = processed_script_df.film_scripts_processed.apply(calc_punctuation_frequency)
+    processed_script_df["avg_word_len"] = processed_script_df.film_scripts_processed.apply(calc_avg_word_length)
     processed_script_df["ttr"] = processed_script_df.film_scripts_processed.apply(calc_ttr)
-        
+    # No punctuation count     
+    #processed_script_df["punctuation_count"] = processed_script_df.film_scripts_processed.apply(calc_punctuation_frequency)
+
     write_pickle(processed_script_df, out_path, pickle_name)
     
     return processed_script_df 
@@ -165,6 +167,16 @@ def calc_avg_sentence_length(col_in):
     avg_sen_length = sum(word_count) / len(word_count)
     return avg_sen_length
 
+
+def calc_avg_word_length(col_in):
+    import re
+    remove_punct = re.sub(r'[^a-zA-Z]', ' ', col_in)
+    words = remove_punct.split()  
+    total_len = sum(len(word) for word in words) 
+    avg = total_len / len(words) 
+    #print(f"Average word length: {avg:.2f}") 
+    return avg
+
 def calc_punctuation_frequency(col_in):
     import re
     import string
@@ -207,8 +219,16 @@ def count_dc_scores_per_genre(df_in):
     genre_df['genres'] = genre_df['genres'].str.split(', ')
     df_exploded = genre_df.explode('genres')
     
-    genre_stats = df_exploded.groupby('genres').agg({'genres': 'count', 'preprocessed_dc_score': 'mean'})
-    genre_stats = genre_stats.rename(columns={'genres': 'count', 'preprocessed_dc_score': 'mean_dc_score'})
+    genre_stats = df_exploded.groupby('genres').agg({'genres': 'count', 
+                                                     'preprocessed_dc_score': ['mean', 'std'], 
+                                                     'ttr': ['mean', 'std'],
+                                                     'avg_sentence_len': ['mean', 'std'],
+                                                     'avg_word_len': ['mean', 'std']})
+    genre_stats.columns = genre_stats.columns.map('_'.join)
+    genre_stats = genre_stats.rename(columns={'genres_count': 'count', 'preprocessed_dc_score_mean': 'mean_dc_score', 
+                                              'preprocessed_dc_score_std': 'std_dc_score',
+                                              'ttr_mean': 'type_token_ratio_mean',
+                                              'ttr_std': 'type_token_ratio_std'})
     return genre_stats
     
 def shapiro_wilk_test(df, column_name):
@@ -628,7 +648,7 @@ def count_vec_fun(df_col_in, name_in, out_path_in, sw_in, min_in=1, max_in=1):
     xform_data = pd.DataFrame(cv.fit_transform(df_col_in).toarray()) #be careful
     #takes up memory when force from sparse to dense
     xform_data.columns = cv.get_feature_names_out()
-    return xform_data
+    return xform_data, cv
 
 def extract_embeddings_pre(df_in, num_vec_in, path_in, filename):
     #from gensim.models import Word2Vec
@@ -711,7 +731,7 @@ def sparse_pca_fun(df_in, target_component, path_o, name_in):
     write_pickle(dim_red, path_o, name_in)
     return red_data
 
-def tune_rf_model(df_in, label_in, X_train, X_test, y_train, y_test, large_param_grid):
+def tune_rf_model(df_in, label_in, X_train, y_train, large_param_grid):
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.metrics import precision_recall_fscore_support
     from sklearn.model_selection import GridSearchCV
@@ -724,7 +744,7 @@ def tune_rf_model(df_in, label_in, X_train, X_test, y_train, y_test, large_param
     # Random Forest Classifer
     
     if large_param_grid:
-        param_grid = {'n_estimators': np.arange(20,160,2),
+        param_grid = {'n_estimators': np.arange(20,100,2),
                'max_depth': np.arange(2,20,1)}
     else:
         param_grid = {'n_estimators': np.arange(20,70,2),
@@ -732,8 +752,6 @@ def tune_rf_model(df_in, label_in, X_train, X_test, y_train, y_test, large_param
     
     random_forest_classifier = GridSearchCV(RandomForestClassifier(random_state=25), param_grid=param_grid, cv=10)
     
-    # TEST HARD CODE
-    #random_forest_classifier = RandomForestClassifier(n_estimators = 37, max_depth = 5,random_state=25)
     
     # Random Forest does not require scaled data 
     random_forest_classifier.fit(X_train, y_train)
@@ -744,16 +762,18 @@ def tune_rf_model(df_in, label_in, X_train, X_test, y_train, y_test, large_param
     # Return the best model
     best_rf_model = random_forest_classifier.best_estimator_
     print("FINISHED TUNING")
+    
     return best_rf_model
     
     #return random_forest_classifier
     
-def model_test_train_fun(rf_in, df_in, label_in, path_in, xform_in, X_train,
-                         X_test, y_train, y_test):
+def model_test_train_fun(rf_in, df_in, label_in, path_in, xform_in,
+                         X_test, y_test):
     #TRAIN AN ALGO USING my_vec
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.metrics import precision_recall_fscore_support
     from sklearn.model_selection import GridSearchCV
+    from sklearn.metrics import confusion_matrix
     import numpy as np
     import pandas as pd 
     
@@ -765,6 +785,9 @@ def model_test_train_fun(rf_in, df_in, label_in, path_in, xform_in, X_train,
         y_test, y_pred, average='weighted'))
     metrics.index = ["precision", "recall", "fscore", "none"]
     print (metrics)
+    
+    print("Confusion Matrix:")
+    print(confusion_matrix(y_test, y_pred))
     
     the_feats = read_pickle(path_in, xform_in)
     try:

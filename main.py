@@ -55,10 +55,11 @@ if __name__ == '__main__':
     """
 
     if WRITE_NEW_PREPROCESSED_FILM_DF:
-        processed_script_df = preprocess_film(movie_dc_before_preprocessing_df, 'movie_scripts_dc_after_preprocessing_df')
+        processed_script_df = preprocess_film(movie_dc_before_preprocessing_df, 'movie_scripts_dc_after_preprocessing_df', out_path)
 
     preprocessed_df = read_pickle(out_path, 'movie_scripts_dc_after_preprocessing_df')
-        
+    #preprocessed_df["avg_word_len"] = preprocessed_df.film_scripts_processed.apply(calc_avg_word_length)
+
     # Just preprocessing film titles
     processed_rt_df = preprocess_rt_df(rotten_tomatoes_df)
     
@@ -105,7 +106,7 @@ if __name__ == '__main__':
        Tune RF Model
     """
   
-    my_vec = count_vec_fun(
+    my_vec, cv = count_vec_fun(
         preprocessed_df.film_scripts_processed, "vec", out_path, "tf-idf", 1, 1)
       
     print("TUNING RF MODEL FOR TOP 20 WORDS")
@@ -114,14 +115,14 @@ if __name__ == '__main__':
     
     
     if TUNE_TOP_20:
-        tuned_rf_model = tune_rf_model(my_vec, preprocessed_df.binary_dc, X_train_words, X_test_words, 
-                                   y_train_words, y_test_words, False)
+        tuned_rf_model = tune_rf_model(my_vec, preprocessed_df.binary_dc, X_train_words, 
+                                   y_train_words, False)
         write_pickle(tuned_rf_model, out_path, 'top_20_rf_model')
     
     tuned_rf_model = read_pickle(out_path, 'top_20_rf_model')
     
     fi_fun = model_test_train_fun(tuned_rf_model, my_vec, preprocessed_df.binary_dc, out_path, "vec",
-                                  X_train_words, X_test_words,  y_train_words, y_test_words)
+                                  X_test_words, y_test_words)
 
     """
         Feature importance
@@ -131,6 +132,23 @@ if __name__ == '__main__':
     # Visualize the feature importances
     plot_feature_importance(top_feature_df)
     
+    print("CLASS DISTRIBUTION of Top 20 features....")
+    cv.vocabulary_.get("soft")
+    for feature in top_feature_df.feature:
+        word_index = cv.vocabulary_.get(feature)
+        just_top_feature = X_train_words.iloc[:, word_index]
+        
+        nonzero_rows = just_top_feature.values.nonzero()[0]
+        
+        docs_with_soft = X_train_words.iloc[nonzero_rows]
+        class_distribution = y_train_words.iloc[nonzero_rows].value_counts(normalize=True)
+        print(f"Class distribution of documents with nonzero {feature} feature: \n {class_distribution} \n")
+        
+        # Compute class distribution of documents with zero feature values
+        zero_rows = (~just_top_feature.astype(bool)).values.nonzero()[0]
+        zero_class_distribution = y_train_words.iloc[zero_rows].value_counts(normalize=True)
+        print(f"Class distribution of documents with zero {feature} feature:\n{zero_class_distribution}\n")
+
 
     """
         Top 20 features
@@ -140,7 +158,7 @@ if __name__ == '__main__':
 
     # Create new DF with additional features 
     df_with_top_20_words = my_vec[top_feature_labels]
-    df_with_only_features = preprocessed_df[["avg_sentence_len", "punctuation_count", "ttr"]]
+    df_with_only_features = preprocessed_df[["avg_sentence_len", "avg_word_len", "ttr"]]
     df_top_20_with_text = pd.concat([df_with_only_features, df_with_top_20_words], axis=1)
 
     df_target = preprocessed_df[["binary_dc"]]
@@ -160,13 +178,13 @@ if __name__ == '__main__':
     
     if TUNE_ADDTL_WITH_TOP_20:
         top_20_rf_model = tune_rf_model(df_top_20_with_text, df_target.binary_dc,
-                                    X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl, True)
+                                    X_train_addtl, y_train_addtl, True)
         write_pickle(top_20_rf_model, out_path, 'top_20_addtl_rf_model')
     
     top_20_rf_model = read_pickle(out_path, 'top_20_addtl_rf_model')
         
     top_20_run = model_test_train_fun(top_20_rf_model, df_top_20_with_text, df_target.binary_dc, out_path, "vec",
-                                      X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl)
+                                      X_test_addtl, y_test_addtl)
 
 
     """
@@ -192,8 +210,10 @@ if __name__ == '__main__':
     merged_rt_and_scripts_df = merged_rt_and_scripts_df.dropna(subset=['runtime'])
     print(merged_rt_and_scripts_df.runtime.isnull().sum(axis = 0))
     
-    
-    
+    """
+        Get some more insight and analysis based on genre grouping
+    """
+
     
     """
         Get Genre Counts - note movies fall under several genres 

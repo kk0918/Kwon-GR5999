@@ -9,7 +9,7 @@ import pandas as pd
 from plotnine import *
 
 
-def preprocess_film(movie_dc_before_preprocessing_df, pickle_name, out_path):
+def preprocess_film(movie_dc_before_preprocessing_df, pickle_name, out_path, gre_words):
     """
         Run all the film script preprocessing steps
     """
@@ -25,6 +25,7 @@ def preprocess_film(movie_dc_before_preprocessing_df, pickle_name, out_path):
     processed_script_df["avg_sentence_len"] = processed_script_df.film_scripts_processed.apply(calc_avg_sentence_length)
     processed_script_df["avg_word_len"] = processed_script_df.film_scripts_processed.apply(calc_avg_word_length)
     processed_script_df["ttr"] = processed_script_df.film_scripts_processed.apply(calc_ttr)
+    processed_script_df["gre_words"] = processed_script_df.film_scripts_processed.apply(lambda x: calc_gre_words(x, gre_words))
     # No punctuation count     
     #processed_script_df["punctuation_count"] = processed_script_df.film_scripts_processed.apply(calc_punctuation_frequency)
 
@@ -95,6 +96,17 @@ def process_tfidf(text):
     tfidf = tfidf_vectorizer.fit_transform(tokens)
     return  pd.DataFrame(tfidf).toarray()
 
+
+def read_gre_csv(file_path):
+    import csv
+    with open(file_path, 'r') as csvfile:
+        reader = csv.reader(csvfile)
+     
+        vocab_list = []
+        for row in reader:
+            word = row[0].split()[0]
+            vocab_list.append(word)
+    return vocab_list
 
 # Preprocess film scripts
 def preprocess_film_scripts_df(df_in):
@@ -188,13 +200,24 @@ def calc_punctuation_frequency(col_in):
     return punct_count
 
 def calc_ttr(col_in):
-    words = nltk.word_tokenize(col_in)
+    import re
+    remove_punct = re.sub(r'[^a-zA-Z]', ' ', col_in)
+    #words = nltk.word_tokenize(col_in)
+    words = col_in.split()
     unique = set(words)
     num_unique = len(unique)
     total_words = len(words)
     
     ttr = num_unique / total_words 
     return ttr
+
+def calc_gre_words(col_in, gre_words):
+    import collections
+    import re
+    remove_punct = re.sub(r'[^a-zA-Z]', ' ', col_in)
+    words = remove_punct.split()  
+    gre_word_counts = collections.Counter(word.lower() for word in words if word.lower() in gre_words)
+    return sum(gre_word_counts.values()) / len(words) 
 
 
 def get_all_genres(df):
@@ -747,7 +770,7 @@ def tune_rf_model(df_in, label_in, X_train, y_train, large_param_grid):
         param_grid = {'n_estimators': np.arange(20,100,2),
                'max_depth': np.arange(2,20,1)}
     else:
-        param_grid = {'n_estimators': np.arange(20,70,2),
+        param_grid = {'n_estimators': np.arange(20,70,10),
                   'max_depth': np.arange(2,8,1)}    
     
     random_forest_classifier = GridSearchCV(RandomForestClassifier(random_state=25), param_grid=param_grid, cv=10)

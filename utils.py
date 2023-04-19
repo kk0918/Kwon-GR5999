@@ -9,45 +9,66 @@ import pandas as pd
 from plotnine import *
 
 
-def preprocess_film(movie_dc_before_preprocessing_df, pickle_name, out_path, gre_words):
-    """
-        Run all the film script preprocessing steps
-    """
-    processed_script_df = preprocess_film_scripts_df(movie_dc_before_preprocessing_df)
-        
-
-    processed_script_df['preprocessed_dc_score'] = processed_script_df.film_scripts_processed.apply(calculate_dc_score)
+def process_film_scripts(movie_dc_before_preprocessing_df, pickle_name, out_path, gre_words, PREPROCESS_FLAG=True):
+    
+    processed_script_df = movie_dc_before_preprocessing_df.copy()
+    if PREPROCESS_FLAG:
+        """
+            Run all the film script preprocessing steps
+        """
+        processed_script_df = preprocess_film_scripts_df(movie_dc_before_preprocessing_df)
+            
+    
+        processed_script_df['preprocessed_dc_score'] = processed_script_df.film_scripts_processed.apply(calculate_dc_score)
         
     """
         Add new feaures such as average sentence length
     """
     # Average sentence length
     processed_script_df["avg_sentence_len"] = processed_script_df.film_scripts_processed.apply(calc_avg_sentence_length)
+    # Average word len
     processed_script_df["avg_word_len"] = processed_script_df.film_scripts_processed.apply(calc_avg_word_length)
+    # Type token ratio
     processed_script_df["ttr"] = processed_script_df.film_scripts_processed.apply(calc_ttr)
+    # Gre word count 
     processed_script_df["gre_words"] = processed_script_df.film_scripts_processed.apply(lambda x: calc_gre_words(x, gre_words))
-    # No punctuation count     
-    #processed_script_df["punctuation_count"] = processed_script_df.film_scripts_processed.apply(calc_punctuation_frequency)
+
 
     write_pickle(processed_script_df, out_path, pickle_name)
     
     return processed_script_df 
+
+def calc_stats_before_preprocessing(df_in, gre_words, out_path, pickle_name):
+    film_df = df_in.copy()
+    # Average sentence length
+    film_df["avg_sentence_len_pre"] = film_df.movie_scripts.apply(calc_avg_sentence_length)
+    # Average word len
+    film_df["avg_word_len_pre"] = film_df.movie_scripts.apply(calc_avg_word_length)
+    # Type token ratio
+    film_df["ttr_pre"] = film_df.movie_scripts.apply(calc_ttr)
+    # Gre word count 
+    film_df["gre_words_pre"] = film_df.movie_scripts.apply(lambda x: calc_gre_words(x, gre_words))
+
+    write_pickle(film_df, out_path, pickle_name)
+
+    return film_df
     
-def get_feature_importance(tuned_rf_model, my_vec):
+# Not using anymore... remove?
+def get_feature_importance(tuned_rf_model, col_names):
     import numpy as np
     import matplotlib.pyplot as plt
     # Get feature importances and sort them in descending order
     feature_importances = tuned_rf_model.feature_importances_
-    feature_names = my_vec.columns
+    #feature_names = my_vec.columns
     sorted_idx = np.argsort(feature_importances)[::-1]
     
-    # Create top 20 most important features DF 
-    top_features_num = 20
+    # Create top 10 most important features DF 
+    top_features_num = 10
     top_feature_df = pd.DataFrame(columns=['feature', 'feature_importance'])
-    print("Top 20 features:")
-    for i in range(20):
-        top_feature_df = top_feature_df.append({'feature': feature_names[sorted_idx[i]], 'feature_importance': feature_importances[sorted_idx[i]]}, ignore_index=True)
-        print(f"{i+1}. {feature_names[sorted_idx[i]]}: {feature_importances[sorted_idx[i]]:.4f}")
+    print("Top 10 features:")
+    for i in range(10):
+        top_feature_df = top_feature_df.append({'feature': col_names[sorted_idx[i]], 'feature_importance': feature_importances[sorted_idx[i]]}, ignore_index=True)
+        print(f"{i+1}. {col_names[sorted_idx[i]]}: {feature_importances[sorted_idx[i]]:.4f}")
     
     return top_feature_df
 
@@ -269,11 +290,39 @@ def shapiro_wilk_test(df, column_name):
         
     return normally_distributed
 
-def plot_hist_dc_scores(df, col_in, title):
+def plot_box_plots(df_in, x_col, title):
+    import matplotlib.pyplot as plt
+    labels=["Rotten", "Fresh"]
+    groups = [0,1]
+    fig, ax = plt.subplots(figsize=(11, 6))
+    
+    print(f'PLOTTING BOXPLOT {title}')
+    
+    i = 0
+    for group in groups:
+      mask = df_in['binary_fresh_rotten'] == group
+      y = df_in.loc[mask, x_col] 
+      
+      print(f'GROUP {labels[i]}')
+      print(y.describe())
+      
+      plt.subplot(1, 2, i+1)
+      plt.boxplot(y, labels=[labels[i]])
+      plt.title(labels[i])
+      plt.xlabel("Cluster")
+      plt.ylabel(title)
+      i+=1
+    
+    
+    
+    plt.suptitle(f'Fresh vs Rotten and {title}')
+    plt.show()
+
+def plot_hist_scores(df, col_in, x_label, title):
     hist_plot = (
         ggplot(df, aes(x=col_in)) + 
         geom_histogram(color="black", bins=20, alpha=0.7, fill="#0072B2") +
-        labs(title=title, x="Dale-Chall Scores", y="Frequency"))
+        labs(title=title, x=x_label, y="Frequency"))
     print(hist_plot)
     
 def plot_genre_dc_scores(df_in):
@@ -291,15 +340,16 @@ def plot_genre_dc_scores(df_in):
     
     print(bar_plot)
     
-def plot_feature_importance(df_in):
+def plot_feature_importance(df_in, title):
     feature_df = df_in.copy()
     
     feature_plot = (
-        ggplot(feature_df, aes(x='reorder(feature, feature_importance)', y='feature_importance')) + 
-        geom_bar(stat='identity', fill="#0072B2") + ggtitle('Top 20 Feature Importances') + 
+        ggplot(feature_df, aes(x='reorder(feature, feature_importance)', y='feature_importance',  fill='feature_importance')) + 
+        geom_bar(stat='identity') + ggtitle(title) + 
+        scale_fill_gradient(low="#0072b2", high="#02ed02") +
+        coord_flip() +
         xlab('Feature') + 
-        ylab('Importance') + 
-        theme(axis_text_x = element_text(angle = 270)))
+        ylab('Importance')) 
     
     print(feature_plot)
 

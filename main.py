@@ -458,14 +458,7 @@ if __name__ == '__main__':
         Get some more insight and analysis based on genre grouping
     """
 
-        
-    """
-        Lime
-    """
-    # USE THIS FOR SOME LOCAL explanations of individual cases - change 0 
-    #use_lime(top_20_rf_model, df_top_20_with_text, df_target.binary_dc, 
-    #         X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl )
-    
+
     
     
     

@@ -267,7 +267,8 @@ def count_dc_scores_per_genre(df_in):
                                                      'preprocessed_dc_score': ['mean', 'std'], 
                                                      'ttr': ['mean', 'std'],
                                                      'avg_sentence_len': ['mean', 'std'],
-                                                     'avg_word_len': ['mean', 'std']})
+                                                     'avg_word_len': ['mean', 'std'],
+                                                     'gre_words': ['mean', 'std']})
     genre_stats.columns = genre_stats.columns.map('_'.join)
     genre_stats = genre_stats.rename(columns={'genres_count': 'count', 'preprocessed_dc_score_mean': 'mean_dc_score', 
                                               'preprocessed_dc_score_std': 'std_dc_score',

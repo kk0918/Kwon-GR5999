@@ -3,6 +3,8 @@
 Created on Mon Oct  3 20:31:11 2022
 
 @author:Billy K
+
+Built off of utils.py from QMSS NLP class
 """
 import nltk
 import pandas as pd
@@ -250,7 +252,6 @@ def get_all_genres(df):
 
 def count_movies_per_genre(df_in):
     genre_df = df_in.copy()
-    # Split the genres column by comma, strip whitespace, and create a new dataframe with binary indicator variables
     genre_df = genre_df['genres'].str.replace(',\s+', ',', regex=True).str.get_dummies(sep=',')
    
     # Compute the count of movies for each genre
@@ -311,7 +312,10 @@ def plot_box_plots(df_in, x_col, title):
       plt.boxplot(y, labels=[labels[i]])
       plt.title(labels[i])
       plt.xlabel("Cluster")
+      #if(group == 0):
       plt.ylabel(title)
+      #else:
+      #    plt.ylabel("")
       i+=1
     
     
@@ -392,8 +396,6 @@ def split_stuck_words(text):
 
 def remove_int_ext(text):
     import re
-    #int_or_ext_pattern = '(INT\.|EXT\..*?)(?=\s*-?\s*[A-Z][a-z])'
-    #int_or_ext_pattern = r'(INT\.|EXT\.)(?=\s*-?\s*[A-Z][a-z])|\b[A-Z][a-z]*([A-Z](?![a-z]))?\b'
     int_or_ext_pattern =  '(INT\.|EXT\.).*?(?=\s*[A-Z][a-z])|\b([A-Z][a-z]*[A-Z])\b'
     replaced_text = re.sub(int_or_ext_pattern, r'\2', text, flags=re.DOTALL)
     return replaced_text

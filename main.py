@@ -232,7 +232,7 @@ if __name__ == '__main__':
     fi_no_lexical_fun = model_test_train_fun(tuned_rf_no_lex_model, df_with_no_lexical_features, df_with_features_and_target_no_lexical.binary_fresh_rotten, out_path, "vec",
                                       X_test_initial, y_test_initial)
 
-    # Get Feature importance 
+    # Feature importance 
     importances_initial = tuned_rf_no_lex_model.feature_importances_
 
     for feature, importance in zip(df_with_no_lexical_features.columns, importances_initial):
@@ -347,116 +347,6 @@ if __name__ == '__main__':
 
     # Show the chart
     plt.show()
-    
-
-    """
-       Tune RF Model
-    """
-  
-    """
-    my_vec, cv = count_vec_fun(
-        preprocessed_df.film_scripts_processed, "vec", out_path, "tf-idf", 1, 1)
-      
-    print("TUNING RF MODEL FOR TOP 20 WORDS")
-    X_train_words, X_test_words, y_train_words, y_test_words = train_test_split(
-        my_vec, preprocessed_df.binary_dc, test_size=TESTING_SPLIT, random_state=RANDOM_STATE)
-    
-    
-    if TUNE_TOP_20:
-        tuned_rf_model = tune_rf_model(my_vec, preprocessed_df.binary_dc, X_train_words, 
-                                   y_train_words, False)
-        write_pickle(tuned_rf_model, out_path, 'top_20_rf_model')
-    
-    tuned_rf_model = read_pickle(out_path, 'top_20_rf_model')
-    
-    fi_fun = model_test_train_fun(tuned_rf_model, my_vec, preprocessed_df.binary_dc, out_path, "vec",
-                                  X_test_words, y_test_words)
-    """
-
-    """
-        Feature importance
-    """
-    
-    """
-
-    # Get Feature importance a
-    top_feature_df = get_feature_importance(tuned_rf_model, my_vec)
-    # Visualize the feature importances
-    plot_feature_importance(top_feature_df)
-    
-    
-    print("CLASS DISTRIBUTION of Top 20 features....")
-    cv.vocabulary_.get("soft")
-    for feature in top_feature_df.feature:
-        word_index = cv.vocabulary_.get(feature)
-        just_top_feature = X_train_words.iloc[:, word_index]
-        
-        nonzero_rows = just_top_feature.values.nonzero()[0]
-        
-        docs_with_soft = X_train_words.iloc[nonzero_rows]
-        class_distribution = y_train_words.iloc[nonzero_rows].value_counts(normalize=True)
-        print(f"Class distribution of documents with nonzero {feature} feature: \n {class_distribution} \n")
-        
-        # Compute class distribution of documents with zero feature values
-        zero_rows = (~just_top_feature.astype(bool)).values.nonzero()[0]
-        zero_class_distribution = y_train_words.iloc[zero_rows].value_counts(normalize=True)
-        print(f"Class distribution of documents with zero {feature} feature:\n{zero_class_distribution}\n")
-    """
-    
-    """
-        Top 20 features
-    """
-    """
-    top_feature_labels = top_feature_df.feature
-
-
-    # Create new DF with additional features 
-    df_with_top_20_words = my_vec[top_feature_labels]
-    df_with_only_features = preprocessed_df[["avg_sentence_len", "avg_word_len", "ttr"]]
-    df_top_20_with_text = pd.concat([df_with_only_features, df_with_top_20_words], axis=1)
-
-    df_target = preprocessed_df[["binary_dc"]]
-    
-    
-    # Check Pearson's coefficient
-    corr = df_target['binary_dc'].corr(df_top_20_with_text['avg_sentence_len'], method='pearson')
-    print("PEARSON CORRELATION COEFFICIENT BETWEEN DALE_CHALL AND AVG SEN LENGTH: ", corr)
-    """
-    
-    """
-        Create Model
-    """
-    """
-    print("TUNING RF MODEL W/ TOP 20 AND ADDITIONAL FEATURES")
-    X_train_addtl, X_test_addtl, y_train_addtl, y_test_addtl = train_test_split(
-        df_top_20_with_text, df_target.binary_dc, test_size=TESTING_SPLIT, random_state=RANDOM_STATE)
-    
-    if TUNE_ADDTL_WITH_TOP_20:
-        top_20_rf_model = tune_rf_model(df_top_20_with_text, df_target.binary_dc,
-                                    X_train_addtl, y_train_addtl, True)
-        write_pickle(top_20_rf_model, out_path, 'top_20_addtl_rf_model')
-    
-    top_20_rf_model = read_pickle(out_path, 'top_20_addtl_rf_model')
-        
-    top_20_run = model_test_train_fun(top_20_rf_model, df_top_20_with_text, df_target.binary_dc, out_path, "vec",
-                                      X_test_addtl, y_test_addtl)
-
-    """
-    
-    """
-        Feature importance of Model with Top 20 words and addtl features 
-    """
-    """
-    # Get Feature importance a
-    top_feature_with_addtl_feat_df = get_feature_importance(top_20_rf_model, df_top_20_with_text)
-    # Visualize the feature importances
-    plot_feature_importance(top_feature_with_addtl_feat_df)
-    """
-  
-    
-    """
-        Get some more insight and analysis based on genre grouping
-    """
 
 
     

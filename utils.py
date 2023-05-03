@@ -841,7 +841,46 @@ def tune_rf_model(df_in, label_in, X_train, y_train, large_param_grid):
     
     return best_rf_model
     
-    #return random_forest_classifier
+def tune_bag_cart_model(df_in, label_in, X_train, y_train, large_param_grid):
+    from sklearn.ensemble import BaggingClassifier
+    from sklearn.tree import DecisionTreeClassifier
+    from sklearn.model_selection import GridSearchCV
+    import numpy as np
+    import pandas as pd 
+    """
+        TUNE
+    """
+    print("TUNING BAG CART")
+    # Bag Cart Classifer
+    
+    if large_param_grid:
+        param_grid = {
+              'base_estimator__max_depth' : np.arange(1,5,1),
+              'n_estimators': np.arange(20,100,5),
+               'max_samples': np.arange(2,20,2),
+               'max_features': np.arange(0.25,1,0.25)}
+    else:
+     param_grid = {
+          # 'base_estimator__max_depth' : np.arange(1,5,1),
+           #'n_estimators': np.arange(20,100,5),
+            #'max_samples': np.arange(2,20,2),
+            'max_features': np.arange(0.25,1,0.25)}
+    
+    bag_cart_classifier = GridSearchCV(BaggingClassifier(base_estimator=DecisionTreeClassifier(), random_state=25), param_grid=param_grid, cv=10)
+    
+    
+    # bag cart does not require scaled data 
+    bag_cart_classifier.fit(X_train, y_train)
+    
+    print("best mean cross-validation score: {:.3f}".format(bag_cart_classifier.best_score_))
+    print("best parameters: {}".format(bag_cart_classifier.best_params_))
+    
+    # Return the best model
+    best_bc_model = bag_cart_classifier.best_estimator_
+    print("FINISHED TUNING")
+    
+    return best_bc_model
+    
     
 def model_test_train_fun(rf_in, df_in, label_in, path_in, xform_in,
                          X_test, y_test):
@@ -877,7 +916,7 @@ def model_test_train_fun(rf_in, df_in, label_in, path_in, xform_in,
         print ("can't get features")
         pass
     
-    return fi
+    return
 
 def use_lime(rf_in, df_in, label_in, X_train, X_test, y_train, y_test):
     from sklearn.model_selection import train_test_split

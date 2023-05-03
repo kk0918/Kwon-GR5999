@@ -38,6 +38,7 @@ if __name__ == '__main__':
     WRITE_NEW_NOT_PREPROCESSED_FILM_DF = False
     WRITE_NEW_PREPROCESSED_FILM_DF = False
     TUNE_RF_MODEL = False
+    TUNE_BC_MODEL = False
     TUNE_ADDTL_WITH_TOP_20 = False
     CALC_BEFORE_PREPROCESSING = False
     TESTING_SPLIT = 0.2
@@ -179,16 +180,10 @@ if __name__ == '__main__':
     plot_hist_scores(merged_rt_and_scripts_df, "gre_words", "GRE Word Percentage", "Distribution of Preprocessed Film Script GRE Word Percentage")
  
     """ 
-       Use Shapiro wilk Test to determine if it is normally distributed to determine whether to cut by mean
+       Use Shapiro wilk Test to determine if it is normally distributed 
     """
     normally_distributed = shapiro_wilk_test(merged_rt_and_scripts_df, "preprocessed_dc_score")
    
-    #median_score_dc_score = preprocessed_df["preprocessed_dc_score"].median()
-    #print("MEDIAN OF MERGED: " + str(median_score_dc_score))
-    #print("GREATER THAN MEDIAN: " + str(len(preprocessed_df[preprocessed_df['preprocessed_dc_score'] >= median_score_dc_score])))
-    #print("LESS THAN MEDIAN: " + str(len(preprocessed_df[preprocessed_df['preprocessed_dc_score'] < median_score_dc_score])))
-
-    
     """
         Target variable = RT fresh or rotten
         Without lexical features, only movie features 
@@ -196,8 +191,7 @@ if __name__ == '__main__':
         content_rating, genres, runtime
     """
     
-    # CONTENT_RATING 
-    # one-hot encoding 
+    # CONTENT_RATING one-hot
     # ['content_rating_G', 'content_rating_NC17', 'content_rating_NR','content_rating_PG-13', 'content_rating_R'],
     rating_onehot = pd.get_dummies(merged_rt_and_scripts_df['content_rating'], prefix='content_rating')
     rating_onehot = rating_onehot.drop('content_rating_PG', axis=1)
@@ -211,7 +205,6 @@ if __name__ == '__main__':
  
     df_with_features_and_target_no_lexical = merged_rt_and_scripts_df.loc[:, ['binary_fresh_rotten', 'runtime' ] + list(merged_rt_and_scripts_df.columns[-24:])]
 
-    #df_with_features_and_target_no_lexical = merged_rt_and_scripts_df[["binary_fresh_rotten", "audience_rating", "audience_count", "runtime", "tomatometer_top_critics_count"]]
     # Check size after drop na
     df_with_features_and_target_no_lexical = df_with_features_and_target_no_lexical.dropna()
     
@@ -231,6 +224,19 @@ if __name__ == '__main__':
         
     fi_no_lexical_fun = model_test_train_fun(tuned_rf_no_lex_model, df_with_no_lexical_features, df_with_features_and_target_no_lexical.binary_fresh_rotten, out_path, "vec",
                                       X_test_initial, y_test_initial)
+    
+    # TRY BAG-CART
+    if TUNE_BC_MODEL:
+        tuned_bc_no_lex_model = tune_bag_cart_model(df_with_no_lexical_features, df_with_features_and_target_no_lexical.binary_fresh_rotten,
+                                   X_train_initial, y_train_initial, True)
+        write_pickle(tuned_bc_no_lex_model, out_path, 'top_bc_no_lexical_model')
+                     
+    tuned_bc_no_lex_model = read_pickle(out_path, 'top_bc_no_lexical_model')
+    
+    print("BAG CART \n")
+    bc_fi_no_lexical_fun = model_test_train_fun(tuned_bc_no_lex_model, df_with_no_lexical_features, df_with_features_and_target_no_lexical.binary_fresh_rotten, out_path, "vec",
+                                      X_test_initial, y_test_initial)
+    
 
     # Feature importance 
     importances_initial = tuned_rf_no_lex_model.feature_importances_
@@ -251,12 +257,10 @@ if __name__ == '__main__':
     """
     print("\n USING LEXICAL FEATURES \n")
     df_with_features_and_target = merged_rt_and_scripts_df.loc[:, ['binary_fresh_rotten', 'runtime', 'preprocessed_dc_score', "gre_words", "avg_sentence_len", "avg_word_len", "ttr" ] + list(merged_rt_and_scripts_df.columns[-24:])]
-    #df_with_features_and_target = merged_rt_and_scripts_df[["binary_fresh_rotten","preprocessed_dc_score", "gre_words", "avg_sentence_len", "avg_word_len", "ttr", "audience_rating", "audience_count", "runtime", "tomatometer_top_critics_count"]]
     # Check size after drop na
     df_with_features_and_target = df_with_features_and_target.dropna()
     
     df_with_only_features = df_with_features_and_target.loc[:, 'runtime':]
-    #df_with_only_features = df_with_features_and_target[["preprocessed_dc_score", "gre_words", "avg_sentence_len",  "avg_word_len", "ttr", "audience_rating", "audience_count", "runtime", "tomatometer_top_critics_count"]]
     
     
     X_train, X_test, y_train, y_test = train_test_split(
@@ -270,6 +274,18 @@ if __name__ == '__main__':
     tuned_rf_model = read_pickle(out_path, 'top_rf_fresh_model')
         
     fi_fun = model_test_train_fun(tuned_rf_model, df_with_only_features, df_with_features_and_target.binary_fresh_rotten, out_path, "vec",
+                                      X_test, y_test)
+    
+    # TRY BAG-CARTT
+    if TUNE_BC_MODEL:
+        tuned_bc_lex_model = tune_bag_cart_model(df_with_only_features, df_with_features_and_target.binary_fresh_rotten,
+                                   X_train, y_train, True)
+        write_pickle(tuned_bc_lex_model, out_path, 'top_bc_lexical_model')
+                     
+    tuned_bc_lex_model = read_pickle(out_path, 'top_bc_lexical_model')
+    
+    print("LEXICAL BAG CART \n")
+    bc_fi_lexical_fun = model_test_train_fun(tuned_bc_lex_model, df_with_only_features, df_with_features_and_target.binary_fresh_rotten, out_path, "vec",
                                       X_test, y_test)
     
     # Get Feature importance 

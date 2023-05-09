@@ -91,7 +91,6 @@ if __name__ == '__main__':
     print(merged_rt_and_scripts_df['binary_fresh_rotten'].value_counts())
     #'Certified-Fresh', 'Rotten', 'Fresh'
     
-    
     """
         Calculate stats on text before preprocessing to compare before and after
     """
@@ -208,7 +207,6 @@ if __name__ == '__main__':
     # Check size after drop na
     df_with_features_and_target_no_lexical = df_with_features_and_target_no_lexical.dropna()
     
-    #df_with_no_lexical_features = df_with_features_and_target_no_lexical[["audience_rating", "audience_count", "runtime", "tomatometer_top_critics_count"]]
     df_with_no_lexical_features = df_with_features_and_target_no_lexical.loc[:, 'runtime':]
     
     
@@ -350,7 +348,6 @@ if __name__ == '__main__':
     # avg_word_len
     plot_box_plots(merged_rt_and_scripts_df, "avg_word_len", "Avg Word Length")
     
-    
     # Bar chart for content_rating and fresh/rotten count
     fig, ax = plt.subplots(figsize=(6, 6))
     
@@ -382,7 +379,6 @@ if __name__ == '__main__':
 
     # Show the chart
     plt.show()
-
 
     # Extra data on most common words
     find_most_common_words(merged_rt_and_scripts_df)

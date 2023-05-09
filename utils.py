@@ -173,11 +173,11 @@ def preprocess_film_scripts_df(df_in):
     processed_df.loc[processed_df["movie_titles_stripped"] == "precious", "movie_titles_stripped"] = 'precious based on novel push by sapphire'
     
     
-    # remove words in parentheses from film scripts since these are not spoken
+    # Remove words in parentheses from film scripts since these are not spoken
     processed_df["film_scripts_processed"] = processed_df.movie_scripts.apply(remove_parens)
     # Remove text following INT. or EXT. up to first punctuation mark or uppcase followed by lower case or lower case
     processed_df["film_scripts_processed"] = processed_df.film_scripts_processed.apply(remove_int_ext)
-    # remove all capital letters followed by a colon
+    # Remove all capital letters followed by a colon
     processed_df["film_scripts_processed"] = processed_df.film_scripts_processed.apply(remove_names)
     # Add space after punctuations in case words are stuck. this helps sent_tokenize in the next step
     processed_df["film_scripts_processed"] = processed_df.film_scripts_processed.apply(add_space_after_punctuations)

@@ -294,9 +294,11 @@ def shapiro_wilk_test(df, column_name):
 
 def plot_box_plots(df_in, x_col, title):
     import matplotlib.pyplot as plt
+    plt.rcParams.update({'font.size': 17})
+
     labels=["Rotten", "Fresh"]
     groups = [0,1]
-    fig, ax = plt.subplots(figsize=(11, 6))
+    fig, ax = plt.subplots(figsize=(10, 6))
     
     print(f'PLOTTING BOXPLOT {title}')
     
@@ -312,12 +314,11 @@ def plot_box_plots(df_in, x_col, title):
       plt.boxplot(y, labels=[labels[i]])
       plt.title(labels[i])
       plt.xlabel("Cluster")
-      #if(group == 0):
-      plt.ylabel(title)
-      #else:
-      #    plt.ylabel("")
+      if(group == 0):
+          plt.ylabel(title)
+      else:
+          plt.ylabel("")
       i+=1
-    
     
     
     plt.suptitle(f'Fresh vs Rotten and {title}')
@@ -674,7 +675,6 @@ def word_freq(df_in, col_in):
 def rem_sw(df_in):
     from nltk.corpus import stopwords
     sw = stopwords.words('english')
-    sw.append("xp") #append a keyword to sw
     tmp = [word for word in df_in.split() if word not in sw]
     tmp = ' '.join(tmp)
     return tmp
@@ -726,39 +726,6 @@ def count_vec_fun(df_col_in, name_in, out_path_in, sw_in, min_in=1, max_in=1):
     xform_data.columns = cv.get_feature_names_out()
     return xform_data, cv
 
-def extract_embeddings_pre(df_in, num_vec_in, path_in, filename):
-    #from gensim.models import Word2Vec
-    import pandas as pd
-    #from gensim.models import KeyedVectors
-    import pickle
-    #import gensim
-    import gensim.downloader as api
-    my_model = api.load(filename)
-    
-    #my_model = KeyedVectors.load_word2vec_format(
-    #    filename, binary=True) 
-    #my_model = Word2Vec(df_in.str.split(),
-    #                    min_count=1, vector_size=300)
-    #word_dict = my_model.wv.key_to_index
-    #my_model.most_similar("calculus")
-    #my_model.similarity("trout", "fish")
-    def get_score(var):
-        import numpy as np
-        tmp_arr = list()
-        try:
-            for word in var:
-                tmp_arr.append(list(my_model.get_vector(word)))
-        except:
-            tmp_arr.append(np.zeros(num_vec_in).tolist())
-            #print(word)
-            pass
-        return np.mean(np.array(tmp_arr), axis=0)
-    tmp_out = df_in.str.split().apply(get_score)
-    tmp_data = tmp_out.apply(pd.Series).fillna(0)
-    pickle.dump(my_model, open(path_in + "embeddings.pk", "wb"))
-    pickle.dump(tmp_data, open(path_in + "embeddings_df.pk", "wb" ))
-    return tmp_data
-
 def extract_embeddings_domain(df_in, num_vec_in, path_in):
     #domain specific, train out own model specific to our domains
     from gensim.models import Word2Vec
@@ -807,7 +774,7 @@ def sparse_pca_fun(df_in, target_component, path_o, name_in):
     write_pickle(dim_red, path_o, name_in)
     return red_data
 
-def tune_rf_model(df_in, label_in, X_train, y_train, large_param_grid):
+def tune_rf_model(df_in, label_in, X_train, y_train, large_param_grid, class_weight=None):
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.metrics import precision_recall_fscore_support
     from sklearn.model_selection import GridSearchCV
@@ -826,7 +793,7 @@ def tune_rf_model(df_in, label_in, X_train, y_train, large_param_grid):
         param_grid = {'n_estimators': np.arange(20,70,10),
                   'max_depth': np.arange(2,8,1)}    
     
-    random_forest_classifier = GridSearchCV(RandomForestClassifier(random_state=25), param_grid=param_grid, cv=10)
+    random_forest_classifier = GridSearchCV(RandomForestClassifier(random_state=25, class_weight=class_weight), param_grid=param_grid, cv=10)
     
     
     # Random Forest does not require scaled data 
@@ -903,6 +870,11 @@ def model_test_train_fun(rf_in, df_in, label_in, path_in, xform_in,
     
     print("Confusion Matrix:")
     print(confusion_matrix(y_test, y_pred))
+    tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+    print("TRUE NEGATIVE: ", tn)
+    print("FALSE NEGATIVE: ", fn)
+    print("FALSE POSITIVE: ", fp)
+    print("TRUE POSITIVE: ", tp)
     
     the_feats = read_pickle(path_in, xform_in)
     try:
@@ -918,23 +890,13 @@ def model_test_train_fun(rf_in, df_in, label_in, path_in, xform_in,
     
     return
 
-def use_lime(rf_in, df_in, label_in, X_train, X_test, y_train, y_test):
-    from sklearn.model_selection import train_test_split
-    import lime
-    import lime.lime_tabular
-    import numpy as np
-    import pandas as pd
-    print("LIME")
-
-    class_names = ['0', '1']
-    explainer = lime.lime_tabular.LimeTabularExplainer(X_train.values, feature_names=X_train.columns.values, class_names=class_names)
-
-    exp = explainer.explain_instance(X_test.values[0], rf_in.predict_proba, num_features=len(X_train.columns))
-    
-    # Print the top features contributing to the predicted class
-    print('Explanation for class %s' % class_names[y_test.values[0]])
-    for i in range(len(exp.as_list())):
-        print(exp.as_list()[i])
+def find_most_common_words(df_in):
+    from collections import Counter 
+    df_in['lowercased_scripts'] = df_in.film_scripts_processed.str.lower()
+    all_text = ' '.join(df_in.lowercased_scripts)
+    word_counter = Counter(all_text.split())
+    print(word_counter.most_common(20))
+    return all_text
 
 def grid_fun(df_in, label_in, test_size_in, path_in, xform_in, grid_d, cv_in):
     #TRAIN AN ALGO USING my_vec

@@ -13,6 +13,7 @@ import os
 from readability import Readability
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
 
 if __name__ == '__main__':
     rotten_tomatoes_dataset_path = os.getcwd() + '/data/rotten_tomatoes_movies.csv'
@@ -38,6 +39,7 @@ if __name__ == '__main__':
     WRITE_NEW_NOT_PREPROCESSED_FILM_DF = False
     WRITE_NEW_PREPROCESSED_FILM_DF = False
     TUNE_RF_MODEL = False
+    TUNE_RF_MODEL_WEIGHT = False
     TUNE_BC_MODEL = False
     TUNE_ADDTL_WITH_TOP_20 = False
     CALC_BEFORE_PREPROCESSING = False
@@ -225,6 +227,17 @@ if __name__ == '__main__':
     fi_no_lexical_fun = model_test_train_fun(tuned_rf_no_lex_model, df_with_no_lexical_features, df_with_features_and_target_no_lexical.binary_fresh_rotten, out_path, "vec",
                                       X_test_initial, y_test_initial)
     
+    # Do it with class_weight='balanced_subsample'    
+    if TUNE_RF_MODEL_WEIGHT:        
+        tuned_rf_no_lex_model_weight = tune_rf_model(df_with_no_lexical_features, df_with_features_and_target_no_lexical.binary_fresh_rotten,
+                                       X_train_initial, y_train_initial, True, 'balanced_subsample')
+        write_pickle(tuned_rf_no_lex_model_weight, out_path, 'top_rf_no_lexical_model_weight')
+        
+    tuned_rf_no_lex_model_weight = read_pickle(out_path, 'top_rf_no_lexical_model_weight')
+    print("CLASS WEIGHT \n")
+    fi_no_lexical_fun_weight = model_test_train_fun(tuned_rf_no_lex_model_weight, df_with_no_lexical_features, df_with_features_and_target_no_lexical.binary_fresh_rotten, out_path, "vec",
+                                          X_test_initial, y_test_initial)
+    
     # TRY BAG-CART
     if TUNE_BC_MODEL:
         tuned_bc_no_lex_model = tune_bag_cart_model(df_with_no_lexical_features, df_with_features_and_target_no_lexical.binary_fresh_rotten,
@@ -276,6 +289,17 @@ if __name__ == '__main__':
     fi_fun = model_test_train_fun(tuned_rf_model, df_with_only_features, df_with_features_and_target.binary_fresh_rotten, out_path, "vec",
                                       X_test, y_test)
     
+    # Do it with class weight    
+    if TUNE_RF_MODEL_WEIGHT:
+        tuned_rf_model_weight = tune_rf_model(df_with_only_features, df_with_features_and_target.binary_fresh_rotten,
+                                       X_train, y_train, True, 'balanced_subsample')
+        write_pickle(tuned_rf_model_weight, out_path, 'top_rf_model_weight')
+        
+    tuned_rf_lex_model_weight = read_pickle(out_path, 'top_rf_model_weight')
+    print("LEXICAL CLASS WEIGHT \n")
+    fi_fun_weight = model_test_train_fun(tuned_rf_lex_model_weight, df_with_only_features, df_with_features_and_target.binary_fresh_rotten, out_path, "vec",
+                                      X_test, y_test)
+    
     # TRY BAG-CARTT
     if TUNE_BC_MODEL:
         tuned_bc_lex_model = tune_bag_cart_model(df_with_only_features, df_with_features_and_target.binary_fresh_rotten,
@@ -313,6 +337,8 @@ if __name__ == '__main__':
     """
         Plots - boxplos
     """
+    # TODO MOVE BELOW INTO SEP FUNCTION
+    
     # Dale-chall
     plot_box_plots(merged_rt_and_scripts_df, "preprocessed_dc_score", "Dale-Chall Score")
     
@@ -365,7 +391,8 @@ if __name__ == '__main__':
     plt.show()
 
 
-    
+    # Extra data on most common words
+    find_most_common_words(merged_rt_and_scripts_df)
     
     
     

@@ -66,7 +66,6 @@ if __name__ == '__main__':
         processed_script_df = process_film_scripts(movie_dc_before_preprocessing_df, 'movie_scripts_dc_after_preprocessing_df', out_path, gre_words, True)
 
     preprocessed_df = read_pickle(out_path, 'movie_scripts_dc_after_preprocessing_df')
-    #preprocessed_df["avg_word_len"] = preprocessed_df.film_scripts_processed.apply(calc_avg_word_length)
 
     # Just preprocessing film titles
     processed_rt_df = preprocess_rt_df(rotten_tomatoes_df)
@@ -300,7 +299,7 @@ if __name__ == '__main__':
     fi_fun_weight = model_test_train_fun(tuned_rf_lex_model_weight, df_with_only_features, df_with_features_and_target.binary_fresh_rotten, out_path, "vec",
                                       X_test, y_test)
     
-    # TRY BAG-CARTT
+    # TRY BAG-CART
     if TUNE_BC_MODEL:
         tuned_bc_lex_model = tune_bag_cart_model(df_with_only_features, df_with_features_and_target.binary_fresh_rotten,
                                    X_train, y_train, True)
@@ -320,10 +319,8 @@ if __name__ == '__main__':
         
     # Plot feature importance    
     top_feature_lex_df = get_feature_importance(tuned_rf_model, df_with_only_features.columns)
-    # Visualize the feature importances
     plot_feature_importance(top_feature_lex_df, 'Top 10 Feature Importances with Lexical Features')
-       
-        
+    
     """
         Get Genre Counts - note movies fall under several genres 
     """
@@ -332,7 +329,6 @@ if __name__ == '__main__':
     # Plots
     plot_genre_dc_scores(dc_and_genre_count)
            
-        
     
     """
         Plots - boxplos

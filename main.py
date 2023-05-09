@@ -101,7 +101,6 @@ if __name__ == '__main__':
     pre_df = read_pickle(out_path, 'movie_scripts_no_preprocessing_stats_df')
     
    
-    # TODO MOVE BELOW INTO SEP FUNCTION
     """
         Dale-Chall Medians and describe
     """
@@ -332,9 +331,7 @@ if __name__ == '__main__':
     
     """
         Plots - boxplos
-    """
-    # TODO MOVE BELOW INTO SEP FUNCTION
-    
+    """    
     # Dale-chall
     plot_box_plots(merged_rt_and_scripts_df, "preprocessed_dc_score", "Dale-Chall Score")
     

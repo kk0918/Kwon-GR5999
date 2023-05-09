@@ -11,6 +11,10 @@ import pandas as pd
 from plotnine import *
 
 
+"""
+    Process Film Scripts - Optionally Preprocess Film Scripts 
+        Get Avg Sentence Len, Avg Word Len, TTR, and Gre Word Freq
+"""
 def process_film_scripts(movie_dc_before_preprocessing_df, pickle_name, out_path, gre_words, PREPROCESS_FLAG=True):
     
     processed_script_df = movie_dc_before_preprocessing_df.copy()
@@ -24,7 +28,7 @@ def process_film_scripts(movie_dc_before_preprocessing_df, pickle_name, out_path
         processed_script_df['preprocessed_dc_score'] = processed_script_df.film_scripts_processed.apply(calculate_dc_score)
         
     """
-        Add new feaures such as average sentence length
+        Add new lexical features
     """
     # Average sentence length
     processed_script_df["avg_sentence_len"] = processed_script_df.film_scripts_processed.apply(calc_avg_sentence_length)
@@ -40,6 +44,9 @@ def process_film_scripts(movie_dc_before_preprocessing_df, pickle_name, out_path
     
     return processed_script_df 
 
+"""
+    Prior to preprocessing - Get Avg Sentence Len, Avg Word Len, TTR, and Gre Word Freq
+"""
 def calc_stats_before_preprocessing(df_in, gre_words, out_path, pickle_name):
     film_df = df_in.copy()
     # Average sentence length
@@ -55,13 +62,13 @@ def calc_stats_before_preprocessing(df_in, gre_words, out_path, pickle_name):
 
     return film_df
     
-# Not using anymore... remove?
+
 def get_feature_importance(tuned_rf_model, col_names):
     import numpy as np
     import matplotlib.pyplot as plt
+    
     # Get feature importances and sort them in descending order
     feature_importances = tuned_rf_model.feature_importances_
-    #feature_names = my_vec.columns
     sorted_idx = np.argsort(feature_importances)[::-1]
     
     # Create top 10 most important features DF 
@@ -131,7 +138,9 @@ def read_gre_csv(file_path):
             vocab_list.append(word)
     return vocab_list
 
-# Preprocess film scripts
+"""
+    Preprocessing Film Scripts
+"""
 def preprocess_film_scripts_df(df_in):
     import pandas as pd
     processed_df = df_in.copy()
@@ -209,23 +218,19 @@ def calc_avg_word_length(col_in):
     words = remove_punct.split()  
     total_len = sum(len(word) for word in words) 
     avg = total_len / len(words) 
-    #print(f"Average word length: {avg:.2f}") 
     return avg
 
 def calc_punctuation_frequency(col_in):
     import re
     import string
     # Punctuation includes !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
-    #punctuation_count = sum(col_in.count(char) for char in string.punctuation)
     punct_pattern = re.compile(f"[{re.escape(string.punctuation)}]+")
     punct_count = len(punct_pattern.findall(col_in))
-    #print(f"Punctuation Count: {punct_count}")
     return punct_count
 
 def calc_ttr(col_in):
     import re
     remove_punct = re.sub(r'[^a-zA-Z]', ' ', col_in)
-    #words = nltk.word_tokenize(col_in)
     words = col_in.split()
     unique = set(words)
     num_unique = len(unique)
@@ -380,7 +385,6 @@ def split_stuck_words(text):
     for sent in arr_sentences:
         my_sent_split = wordninja.split(sent)
             
-
         fixed_sentence = ""
         # Check if last char is punctuation so we can add to wordninja split
         if sent and sent[-1] and sent[-1][-1].strip() in ",.;:!?":
@@ -448,7 +452,6 @@ def write_new_film_df_pickle(film_scripts_dir, out_path):
                  # Add to lists to create DF
                  movie_titles.append(name)
                  movie_scripts.append(text)
-                 
              except Exception as e:
                  print(e)
                  err_count+=1

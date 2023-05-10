@@ -2,7 +2,7 @@
 """
 Created on Mon Oct  3 20:31:11 2022
 
-@author:Billy K
+@author: Billy K
 
 Built off of utils.py from QMSS NLP class
 """
@@ -40,6 +40,7 @@ def process_film_scripts(movie_dc_before_preprocessing_df, pickle_name, out_path
     processed_script_df["gre_words"] = processed_script_df.film_scripts_processed.apply(lambda x: calc_gre_words(x, gre_words))
 
 
+    # Write into pickle
     write_pickle(processed_script_df, out_path, pickle_name)
     
     return processed_script_df 
@@ -62,7 +63,9 @@ def calc_stats_before_preprocessing(df_in, gre_words, out_path, pickle_name):
 
     return film_df
     
-
+"""
+    Get Top 10 Feature importances from Tuned Random Forest Model
+"""
 def get_feature_importance(tuned_rf_model, col_names):
     import numpy as np
     import matplotlib.pyplot as plt
@@ -80,34 +83,6 @@ def get_feature_importance(tuned_rf_model, col_names):
         print(f"{i+1}. {col_names[sorted_idx[i]]}: {feature_importances[sorted_idx[i]]:.4f}")
     
     return top_feature_df
-
-def build_binary_rf(df, feature_col, target_col):
-    import numpy as np
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.model_selection import train_test_split
-    from scipy.sparse import vstack
-    # Concatenate all the TF-IDF matrices into a single matrix
-    X = df[feature_col]
-    y = df[target_col]
-
-    # Split data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=25)
-
-    # Random Forest Classifer
-    """ TODO: tune
-    param_grid = {'n_estimators': np.arange(1,50,2),
-                  'max_depth': np.arange(1,10,2)}    
-    """
-    
-    random_forest_classifier = RandomForestClassifier(n_estimators=100, random_state=25)
-    
-    # Random Forest does not require scaled data 
-    random_forest_classifier.fit(X_train, y_train)
-    
-    # Evaluate model on test data
-    score = rf.score(X_test, y_test)
-    print("Test accuracy: {:.3f}".format(score))
-
 
 def process_tfidf(text):
     from sklearn.feature_extraction.text import TfidfVectorizer
